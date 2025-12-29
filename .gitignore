@@ -1,0 +1,40 @@
+# --------------------
+# ENV & SECRETS
+# --------------------
+.env
+*.env
+
+# --------------------
+# PYTHON / DJANGO
+# --------------------
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+db.sqlite3
+*.sqlite3
+
+# Virtual Environment
+env/
+venv/
+workfina_env/
+backend/workfina_env/
+
+# Django static & media (agar ho)
+staticfiles/
+media/
+
+# --------------------
+# FLUTTER
+# --------------------
+build/
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+
+# --------------------
+# IDE / OS
+# --------------------
+.vscode/
+.idea/
+.DS_Store
