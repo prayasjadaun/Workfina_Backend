@@ -3,61 +3,78 @@ from django.contrib.auth import get_user_model
 from django.db.models.signals import pre_save
 from django.dispatch import receiver
 import uuid
+from apps.recruiters.models import HRProfile
 
 User = get_user_model()
 
+class FilterCategory(models.Model):
+    """Main filter categories like Department, Religion, Location etc."""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    name = models.CharField(max_length=100, unique=True)
+    slug = models.SlugField(max_length=100, unique=True)
+    icon = models.ImageField(upload_to='filter_icons/', blank=True, null=True)
+    display_order = models.PositiveIntegerField(default=0)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        ordering = ['display_order', 'name']
+    
+    def __str__(self):
+        return self.name
+
+class FilterOption(models.Model):
+    """Individual options within each category"""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    category = models.ForeignKey(FilterCategory, on_delete=models.CASCADE, related_name='options')
+    name = models.CharField(max_length=255)
+    slug = models.SlugField(max_length=255)
+    parent = models.ForeignKey('self', on_delete=models.CASCADE, null=True, blank=True, related_name='children')
+    display_order = models.PositiveIntegerField(default=0)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        ordering = ['display_order', 'name']
+        unique_together = ['category', 'slug']
+    
+    def __str__(self):
+        if self.parent:
+            return f"{self.parent.name} > {self.name}"
+        return f"{self.category.name}: {self.name}"
+
 class Candidate(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    # Link to User account
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='candidate_profile')
 
     # Basic Information
     full_name = models.CharField(max_length=255)
-    masked_name = models.CharField(max_length=50)  # e.g., "J*** D***"
+    masked_name = models.CharField(max_length=50)
     phone = models.CharField(max_length=20)
     age = models.PositiveIntegerField()
     
-    # Professional Information
-    ROLE_CHOICES = [
-        ('IT', 'Information Technology'),
-        ('HR', 'Human Resources'),
-        ('SUPPORT', 'Customer Support'),
-        ('SALES', 'Sales'),
-        ('MARKETING', 'Marketing'),
-        ('FINANCE', 'Finance'),
-        ('DESIGN', 'Design'),
-        ('OTHER', 'Other'),
-    ]
-    role = models.CharField(max_length=20, choices=ROLE_CHOICES)
+    # Professional Information - Using FilterOption
+    role = models.ForeignKey(FilterOption, on_delete=models.SET_NULL, null=True, blank=True, related_name='role_candidates')
     experience_years = models.PositiveIntegerField()
     current_ctc = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     expected_ctc = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     
-    # Personal Information
-    RELIGION_CHOICES = [
-        ('HINDU', 'Hindu'),
-        ('MUSLIM', 'Muslim'),
-        ('CHRISTIAN', 'Christian'),
-        ('SIKH', 'Sikh'),
-        ('BUDDHIST', 'Buddhist'),
-        ('JAIN', 'Jain'),
-        ('OTHER', 'Other'),
-        ('PREFER_NOT_TO_SAY', 'Prefer not to say'),
-    ]
-    religion = models.CharField(max_length=20, choices=RELIGION_CHOICES, blank=True)
+    # Personal Information - Using FilterOption
+    religion = models.ForeignKey(FilterOption, on_delete=models.SET_NULL, null=True, blank=True, related_name='religion_candidates')
     
-    # Location
-    country = models.CharField(max_length=100, default='India')
-    state = models.CharField(max_length=100)
-    city = models.CharField(max_length=100)
+    # Location - Using FilterOption with hierarchy
+    country = models.ForeignKey(FilterOption, on_delete=models.SET_NULL, null=True, blank=True, related_name='country_candidates')
+    state = models.ForeignKey(FilterOption, on_delete=models.SET_NULL, null=True, blank=True, related_name='state_candidates')
+    city = models.ForeignKey(FilterOption, on_delete=models.SET_NULL, null=True, blank=True, related_name='city_candidates')
     
-    # Education & Skills
-    education = models.TextField()
+    # Education & Skills - Using FilterOption
+    education = models.ForeignKey(FilterOption, on_delete=models.SET_NULL, null=True, blank=True, related_name='education_candidates')
     skills = models.TextField()  # Comma-separated skills
     
     # Resume & Documents
     resume = models.FileField(upload_to='resumes/', blank=True)
-    
+    video_intro = models.FileField(upload_to='video_intros/', blank=True, null=True)
+
     # Meta Information
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -73,7 +90,7 @@ class Candidate(models.Model):
         return [skill.strip() for skill in self.skills.split(',') if skill.strip()]
 
 class UnlockHistory(models.Model):
-    hr_user = models.ForeignKey(User, on_delete=models.CASCADE, limit_choices_to={'role': 'hr'})
+    hr_user = models.ForeignKey(HRProfile, on_delete=models.CASCADE)
     candidate = models.ForeignKey(Candidate, on_delete=models.CASCADE)
     credits_used = models.PositiveIntegerField(default=10)
     unlocked_at = models.DateTimeField(auto_now_add=True)
@@ -83,7 +100,7 @@ class UnlockHistory(models.Model):
         ordering = ['-unlocked_at']
         
     def __str__(self):
-        return f"{self.hr_user.email} unlocked {self.candidate}"
+        return f"{self.hr_user.user.email} unlocked {self.candidate}"
 
 # Signal to auto-generate masked_name
 @receiver(pre_save, sender=Candidate)

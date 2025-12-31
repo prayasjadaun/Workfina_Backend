@@ -1,9 +1,14 @@
+
+
 from rest_framework import status, generics
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from django.db.models import Q
 from .models import HRProfile
 from .serializers import HRRegistrationSerializer, HRProfileSerializer
+from apps.candidates.models import Candidate, UnlockHistory
+from apps.candidates.serializers import MaskedCandidateSerializer, FullCandidateSerializer
 
 class HRRegistrationView(generics.CreateAPIView):
     serializer_class = HRRegistrationSerializer
@@ -38,7 +43,6 @@ def hr_profile(request):
         return Response({
             'error': 'HR profile not found'
         }, status=status.HTTP_404_NOT_FOUND)
-        
 
 @api_view(['PATCH'])
 @permission_classes([IsAuthenticated])
@@ -58,6 +62,150 @@ def update_hr_profile(request):
     except HRProfile.DoesNotExist:
         return Response({
             'error': 'HR profile not found'
-        }, status=status.HTTP_404_NOT_FOUND)        
+        }, status=status.HTTP_404_NOT_FOUND)
+
+from django.core.paginator import Paginator
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def filter_candidates(request):
+    """Filter candidates API for HR users"""
+    
+    if request.user.role != 'hr':
+        return Response({
+            'error': 'Only HR users can access this'
+        }, status=status.HTTP_403_FORBIDDEN)
+    
+    try:
+        hr_profile = request.user.hr_profile
+        if not hr_profile.is_verified:
+            return Response({
+                'error': 'Company verification pending. Cannot view candidates.'
+            }, status=status.HTTP_403_FORBIDDEN)
+    except HRProfile.DoesNotExist:
+        return Response({
+            'error': 'HR profile not found'
+        }, status=status.HTTP_404_NOT_FOUND)
+    
+    # Get filter parameters
+    role = request.query_params.get('role')
+    min_experience = request.query_params.get('min_experience')
+    max_experience = request.query_params.get('max_experience')
+    min_age = request.query_params.get('min_age')
+    max_age = request.query_params.get('max_age')
+    city = request.query_params.get('city')
+    state = request.query_params.get('state')
+    country = request.query_params.get('country')
+    religion = request.query_params.get('religion')
+    education = request.query_params.get('education')
+    skills = request.query_params.get('skills')
+    min_ctc = request.query_params.get('min_ctc')
+    max_ctc = request.query_params.get('max_ctc')
+    
+    # Pagination
+    page = int(request.query_params.get('page', 1))
+    page_size = int(request.query_params.get('page_size', 20))
+    
+    # Base queryset
+    queryset = Candidate.objects.filter(is_active=True).select_related(
+        'role', 'religion', 'country', 'state', 'city', 'education'
+    )
+    
+    # Apply dynamic filters
+    if role and role != 'All':
+        queryset = queryset.filter(role__name__iexact=role)
         
+    if min_experience:
+        try:
+            queryset = queryset.filter(experience_years__gte=int(min_experience))
+        except ValueError:
+            pass
+            
+    if max_experience:
+        try:
+            queryset = queryset.filter(experience_years__lte=int(max_experience))
+        except ValueError:
+            pass
+            
+    if min_age:
+        try:
+            queryset = queryset.filter(age__gte=int(min_age))
+        except ValueError:
+            pass
+            
+    if max_age:
+        try:
+            queryset = queryset.filter(age__lte=int(max_age))
+        except ValueError:
+            pass
+            
+    if city:
+        queryset = queryset.filter(city__name__icontains=city)
         
+    if state:
+        queryset = queryset.filter(state__name__icontains=state)
+        
+    if country:
+        queryset = queryset.filter(country__name__icontains=country)
+        
+    if religion and religion != 'All':
+        queryset = queryset.filter(religion__name__iexact=religion)
+        
+    if education:
+        queryset = queryset.filter(education__name__icontains=education)
+        
+    if skills:
+        queryset = queryset.filter(skills__icontains=skills)
+        
+    if min_ctc:
+        try:
+            queryset = queryset.filter(expected_ctc__gte=float(min_ctc))
+        except (ValueError, TypeError):
+            pass
+            
+    if max_ctc:
+        try:
+            queryset = queryset.filter(expected_ctc__lte=float(max_ctc))
+        except (ValueError, TypeError):
+            pass
+    
+    # Apply pagination
+    paginator = Paginator(queryset, page_size)
+    candidates_page = paginator.get_page(page)
+    
+    # Get unlocked candidate IDs
+    unlocked_ids = set(UnlockHistory.objects.filter(
+        hr_user=request.user.hr_profile
+    ).values_list('candidate_id', flat=True))
+    
+    # Serialize candidates
+    candidates_data = []
+    for candidate in candidates_page:
+        if candidate.id in unlocked_ids:
+            serializer = FullCandidateSerializer(candidate, context={'request': request})
+        else:
+            serializer = MaskedCandidateSerializer(candidate)
+        candidates_data.append(serializer.data)
+    
+    return Response({
+        'success': True,
+        'candidates': candidates_data,
+        'pagination': {
+            'current_page': page,
+            'page_size': page_size,
+            'total_pages': paginator.num_pages,
+            'total_count': paginator.count,
+            'has_next': candidates_page.has_next(),
+            'has_previous': candidates_page.has_previous(),
+        },
+        'filters_applied': {
+            'role': role,
+            'experience_range': f"{min_experience}-{max_experience}",
+            'age_range': f"{min_age}-{max_age}",
+            'location': f"{city}, {state}, {country}",
+            'religion': religion,
+            'education': education,
+            'skills': skills,
+            'ctc_range': f"{min_ctc}-{max_ctc}"
+        }
+    })
