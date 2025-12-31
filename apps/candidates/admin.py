@@ -25,10 +25,10 @@ class CandidateAdmin(admin.ModelAdmin):
             'fields': ('country', 'state', 'city')
         }),
         ('Education & Resume', {
-            'fields': ('education', 'resume')
+            'fields': ('education', 'resume','video_intro')
         }),
         ('Status', {
-            'fields': ('is_active',)
+            'fields': ('is_active','created_at', 'updated_at')
         })
     )
 

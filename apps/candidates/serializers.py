@@ -10,10 +10,28 @@ class CandidateRegistrationSerializer(serializers.ModelSerializer):
     class Meta:
         model = Candidate
         fields = [
-            'full_name', 'phone', 'age', 'role', 'experience_years',
-            'current_ctc', 'expected_ctc', 'religion', 'country',
-            'state', 'city', 'education', 'skills', 'resume'
+            'full_name', 
+            'phone', 
+            'age', 
+            'role', 
+            'experience_years',
+            'current_ctc', 
+            'expected_ctc', 
+            'religion', 
+            'country',
+            'state', 
+            'city', 
+            'education', 
+            'skills', 
+            'resume',       # ✅ This should be here
+            'video_intro'   # ✅ This should be here
         ]
+
+        extra_kwargs = {
+            'resume': {'required': False, 'allow_null': True},
+            'video_intro': {'required': False, 'allow_null': True},
+        }
+
     
     def create(self, validated_data):
         user = self.context['request'].user
@@ -36,6 +54,9 @@ class FullCandidateSerializer(serializers.ModelSerializer):
     skills_list = serializers.SerializerMethodField()
     email = serializers.CharField(source='user.email', read_only=True)
     credits_used = serializers.IntegerField(read_only=True, required=False)
+    resume_url = serializers.SerializerMethodField()
+    video_intro_url = serializers.SerializerMethodField()  
+
     
     class Meta:
         model = Candidate
@@ -43,11 +64,30 @@ class FullCandidateSerializer(serializers.ModelSerializer):
             'id', 'full_name', 'email', 'phone', 'age',
             'role', 'experience_years', 'current_ctc', 'expected_ctc',
             'religion', 'country', 'state', 'city',
-            'education', 'skills', 'skills_list', 'resume', 'credits_used'
+            'education', 'skills', 'skills_list', 'resume_url','video_intro_url', 'credits_used'
         ]
     
     def get_skills_list(self, obj):
+        """Return skills as a list"""
         return obj.get_skills_list()
+    
+    def get_resume_url(self, obj):
+        """Return full URL for resume file"""
+        if obj.resume:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.resume.url)
+            return obj.resume.url
+        return None
+    def get_video_intro_url(self, obj):
+        """Return full URL for video intro file"""
+        if obj.video_intro:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.video_intro.url)
+            return obj.video_intro.url
+        return None
+
 
 class CandidateFilterSerializer(serializers.Serializer):
     """Serializer for candidate filtering"""

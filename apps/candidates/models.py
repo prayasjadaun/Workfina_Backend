@@ -57,6 +57,8 @@ class Candidate(models.Model):
     
     # Resume & Documents
     resume = models.FileField(upload_to='resumes/', blank=True)
+    video_intro = models.FileField(upload_to='video_intros/', blank=True,null=True)  # ✅ ADD THIS
+
     
     # Meta Information
     is_active = models.BooleanField(default=True)

@@ -1,9 +1,11 @@
 from rest_framework import status, generics
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import api_view, permission_classes,parser_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
+
 from django.contrib.auth import get_user_model
 from .models import Candidate, UnlockHistory
 from .serializers import (
@@ -19,8 +21,19 @@ class CandidateRegistrationView(generics.CreateAPIView):
     
     serializer_class = CandidateRegistrationSerializer
     permission_classes = [IsAuthenticated]
+    parser_classes=[MultiPartParser, FormParser, JSONParser] # ✅ Important for file uploads
+
     
     def post(self, request, *args, **kwargs):
+        print("=" * 50)
+        print("DEBUG - Registration Request")
+        print("=" * 50)
+        print(f"Request DATA keys: {request.data.keys()}")
+        print(f"Request FILES keys: {request.FILES.keys()}")
+        print(f"Resume in FILES: {'resume' in request.FILES}")
+        print(f"Video intro in FILES: {'video_intro' in request.FILES}")
+        print("=" * 50)
+
         # Check if user is candidate
         if request.user.role != 'candidate':
             return Response({
@@ -218,8 +231,54 @@ def get_candidate_profile(request):
     
     try:
         candidate = Candidate.objects.get(user=request.user)
-        serializer = FullCandidateSerializer(candidate)
+        serializer = FullCandidateSerializer(candidate, context={'request': request})  # ✅ Add context
         return Response(serializer.data)
+    except Candidate.DoesNotExist:
+        return Response({
+            'error': 'Profile not found'
+        }, status=status.HTTP_404_NOT_FOUND)
+    
+    # Add this to your views.py
+
+@api_view(['PUT', 'PATCH'])
+@permission_classes([IsAuthenticated])
+@parser_classes([MultiPartParser, FormParser, JSONParser])
+
+def update_candidate_profile(request):
+    """Update candidate's own profile"""
+    
+    if request.user.role != 'candidate':
+        return Response({
+            'error': 'Only candidates can update their profile'
+        }, status=status.HTTP_403_FORBIDDEN)
+    
+    try:
+        candidate = Candidate.objects.get(user=request.user)
+        
+        # Update fields from request
+        serializer = CandidateRegistrationSerializer(
+            candidate, 
+            data=request.data, 
+            partial=True,  # Allow partial updates
+            context={'request': request}
+        )
+        
+        if serializer.is_valid():
+            serializer.save()
+            
+            # Return updated profile
+            response_serializer = FullCandidateSerializer(candidate, context={'request': request})  # ✅ Add context
+            return Response({
+                'success': True,
+                'message': 'Profile updated successfully',
+                'profile': response_serializer.data
+            })
+        else:
+            return Response({
+                'error': 'Validation failed',
+                'details': serializer.errors
+            }, status=status.HTTP_400_BAD_REQUEST)
+            
     except Candidate.DoesNotExist:
         return Response({
             'error': 'Profile not found'
