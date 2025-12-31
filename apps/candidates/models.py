@@ -2,17 +2,35 @@ from django.db import models
 from django.contrib.auth import get_user_model
 from django.db.models.signals import pre_save
 from django.dispatch import receiver
+from django.core.exceptions import ValidationError
 import uuid
 from apps.recruiters.models import HRProfile
 
 User = get_user_model()
+
+def validate_icon_file(value):
+    """Allow both image files and SVG files for icons"""
+    if not value:
+        return
+    
+    # Check file extension
+    if value.name.lower().endswith('.svg'):
+        return  # SVG is allowed
+    
+    # For non-SVG files, use default image validation
+    from PIL import Image
+    try:
+        image = Image.open(value)
+        image.verify()
+    except Exception:
+        raise ValidationError("Upload a valid image or SVG file.")
 
 class FilterCategory(models.Model):
     """Main filter categories like Department, Religion, Location etc."""
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=100, unique=True)
     slug = models.SlugField(max_length=100, unique=True)
-    icon = models.ImageField(upload_to='filter_icons/', blank=True, null=True)
+    icon = models.FileField(upload_to='filter_icons/', blank=True, null=True, validators=[validate_icon_file])
     display_order = models.PositiveIntegerField(default=0)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
