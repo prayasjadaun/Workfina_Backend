@@ -1,12 +1,29 @@
 from django.contrib import admin
-from .models import Candidate, UnlockHistory
+from .models import Candidate, UnlockHistory, FilterCategory, FilterOption
+
+class FilterOptionInline(admin.TabularInline):
+    model = FilterOption
+    extra = 1
+    fields = ['name', 'slug', 'parent', 'display_order', 'is_active']
+
+@admin.register(FilterCategory)
+class FilterCategoryAdmin(admin.ModelAdmin):
+    list_display = ['name', 'slug', 'display_order', 'is_active', 'created_at']
+    list_filter = ['is_active']
+    search_fields = ['name']
+    prepopulated_fields = {'slug': ('name',)}
+    inlines = [FilterOptionInline]
+    ordering = ['display_order', 'name']
+
+
 
 @admin.register(Candidate)
 class CandidateAdmin(admin.ModelAdmin):
     list_display = ['user', 'masked_name', 'role', 'experience_years', 'city', 'age', 'is_active']
-    list_filter = ['role', 'religion', 'state', 'is_active', 'experience_years']
+    list_filter = ['role__category', 'religion', 'state', 'is_active', 'experience_years']
     search_fields = ['full_name', 'masked_name', 'user__email', 'skills']
     readonly_fields = ['masked_name', 'created_at', 'updated_at']
+    raw_id_fields = ['user']  # Better performance for user selection
     
     fieldsets = (
         ('User Account', {
@@ -25,10 +42,10 @@ class CandidateAdmin(admin.ModelAdmin):
             'fields': ('country', 'state', 'city')
         }),
         ('Education & Resume', {
-            'fields': ('education', 'resume','video_intro')
+            'fields': ('education', 'resume', 'video_intro')
         }),
         ('Status', {
-            'fields': ('is_active','created_at', 'updated_at')
+            'fields': ('is_active', 'created_at', 'updated_at')
         })
     )
 
@@ -36,5 +53,6 @@ class CandidateAdmin(admin.ModelAdmin):
 class UnlockHistoryAdmin(admin.ModelAdmin):
     list_display = ['hr_user', 'candidate', 'credits_used', 'unlocked_at']
     list_filter = ['unlocked_at', 'credits_used']
-    search_fields = ['hr_user__email', 'candidate__masked_name']
+    search_fields = ['hr_user__user__email', 'candidate__masked_name']
     readonly_fields = ['unlocked_at']
+    raw_id_fields = ['hr_user', 'candidate']  # Better performance
