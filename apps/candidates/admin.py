@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Candidate, UnlockHistory, FilterCategory, FilterOption
+from .models import Candidate, UnlockHistory, FilterCategory, FilterOption, CandidateNote, CandidateFollowup
 
 class FilterOptionInline(admin.TabularInline):
     model = FilterOption
@@ -42,7 +42,7 @@ class CandidateAdmin(admin.ModelAdmin):
             'fields': ('country', 'state', 'city')
         }),
         ('Education & Resume', {
-            'fields': ('education', 'resume', 'video_intro')
+            'fields': ('education', 'resume', 'video_intro', 'profile_image')
         }),
         ('Status', {
             'fields': ('is_active', 'created_at', 'updated_at')
@@ -56,3 +56,23 @@ class UnlockHistoryAdmin(admin.ModelAdmin):
     search_fields = ['hr_user__user__email', 'candidate__masked_name']
     readonly_fields = ['unlocked_at']
     raw_id_fields = ['hr_user', 'candidate']  # Better performance
+
+@admin.register(CandidateNote)
+class CandidateNoteAdmin(admin.ModelAdmin):
+    list_display = ['hr_user', 'candidate', 'note_text_preview', 'created_at']
+    list_filter = ['created_at']
+    search_fields = ['hr_user__user__email', 'candidate__masked_name', 'note_text']
+    readonly_fields = ['created_at', 'updated_at']
+    raw_id_fields = ['hr_user', 'candidate']
+    
+    def note_text_preview(self, obj):
+        return obj.note_text[:50] + '...' if len(obj.note_text) > 50 else obj.note_text
+    note_text_preview.short_description = 'Note Preview'
+
+@admin.register(CandidateFollowup)
+class CandidateFollowupAdmin(admin.ModelAdmin):
+    list_display = ['hr_user', 'candidate', 'followup_date', 'is_completed', 'created_at']
+    list_filter = ['is_completed', 'followup_date', 'created_at']
+    search_fields = ['hr_user__user__email', 'candidate__masked_name', 'notes']
+    readonly_fields = ['created_at', 'updated_at']
+    raw_id_fields = ['hr_user', 'candidate']

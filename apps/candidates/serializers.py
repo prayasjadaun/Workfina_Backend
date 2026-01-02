@@ -1,8 +1,20 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
-from .models import Candidate, UnlockHistory, FilterCategory, FilterOption
+from .models import Candidate, UnlockHistory, FilterCategory, FilterOption, CandidateNote, CandidateFollowup
 
 User = get_user_model()
+
+class CandidateNoteSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CandidateNote
+        fields = ['id', 'note_text', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'created_at', 'updated_at']
+
+class CandidateFollowupSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CandidateFollowup
+        fields = ['id', 'followup_date', 'notes', 'is_completed', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'created_at', 'updated_at']
 
 class CandidateRegistrationSerializer(serializers.ModelSerializer):
     # Accept strings for foreign key fields
@@ -86,15 +98,14 @@ class CandidateRegistrationSerializer(serializers.ModelSerializer):
             if isinstance(education_name, FilterOption):
                 data['education'] = education_name
             else:
+                # Store original education details
+                data['education_details'] = education_name
+                
                 education_lower = education_name.lower()
                 if 'post-graduation' in education_lower or 'mca' in education_lower or 'mba' in education_lower or 'master' in education_lower:
                     normalized_education = 'Post Graduation'
                 elif 'graduation' in education_lower or 'bca' in education_lower or 'b.tech' in education_lower or 'bachelor' in education_lower:
                     normalized_education = 'Graduation'
-                elif '12th' in education_name or 'twelfth' in education_lower:
-                    normalized_education = '12th'
-                elif '10th' in education_name or 'tenth' in education_lower:
-                    normalized_education = '10th'
                 else:
                     normalized_education = 'Other'
                 
@@ -103,7 +114,7 @@ class CandidateRegistrationSerializer(serializers.ModelSerializer):
                     name=normalized_education,
                     defaults={'slug': normalized_education.lower().replace(' ', '-'), 'is_active': True}
                 )
-                data['education'] = None
+                data['education'] = education
         else:
             data['education'] = None
 
@@ -127,9 +138,8 @@ class CandidateRegistrationSerializer(serializers.ModelSerializer):
             else:
                 state, _ = FilterOption.objects.get_or_create(
                     category=state_category,
-                    name=state_name.title(),  # Title case for consistency
-                    parent=country,
-                    defaults={'slug': state_name.lower().replace(' ', '-'), 'is_active': True}
+                    slug=state_name.lower().replace(' ', '-'),
+                    defaults={'name': state_name.title(), 'parent': country, 'is_active': True}
                 )
             data['state'] = state
         else:
@@ -143,9 +153,8 @@ class CandidateRegistrationSerializer(serializers.ModelSerializer):
             else:
                 city, _ = FilterOption.objects.get_or_create(
                     category=city_category,
-                    name=city_name.title(),  # Title case for consistency
-                    parent=state,
-                    defaults={'slug': city_name.lower().replace(' ', '-'), 'is_active': True}
+                    slug=city_name.lower().replace(' ', '-'),
+                    defaults={'name': city_name.title(), 'parent': state, 'is_active': True}
                 )
                 data['city'] = city
 
@@ -165,13 +174,22 @@ class CandidateRegistrationSerializer(serializers.ModelSerializer):
 class MaskedCandidateSerializer(serializers.ModelSerializer):
     role_name = serializers.CharField(source='role.name', read_only=True)
     city_name = serializers.CharField(source='city.name', read_only=True)
+    profile_image_url = serializers.SerializerMethodField()
     
     class Meta:
         model = Candidate
         fields = [
             'id', 'masked_name', 'role_name', 'experience_years',
-            'city_name', 'age', 'skills', 'is_active'
+            'city_name', 'age', 'skills', 'profile_image_url', 'is_active'
         ]
+    
+    def get_profile_image_url(self, obj):
+        if hasattr(obj, 'profile_image') and obj.profile_image:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.profile_image.url)
+            return obj.profile_image.url
+        return None
 
 
 class FullCandidateSerializer(serializers.ModelSerializer):
@@ -196,7 +214,7 @@ class FullCandidateSerializer(serializers.ModelSerializer):
             'id', 'full_name', 'email', 'phone', 'age',
             'role_name', 'experience_years', 'current_ctc', 'expected_ctc',
             'religion_name', 'country_name', 'state_name', 'city_name',
-            'education_name', 'skills', 'skills_list', 
+            'education_name', 'education_details', 'skills', 'skills_list', 
             'resume_url', 'video_intro_url', 'profile_image_url', 'credits_used'
         ]
     
@@ -373,15 +391,14 @@ class CandidateUpdateSerializer(serializers.ModelSerializer):
             if isinstance(education_value, FilterOption):
                 data['education'] = education_value
             else:
+                # Store original education details
+                data['education_details'] = education_value
+                
                 education_lower = education_value.lower()
                 if 'post-graduation' in education_lower or 'mca' in education_lower or 'mba' in education_lower:
                     level = 'Post Graduation'
                 elif 'graduation' in education_lower or 'bca' in education_lower or 'b.tech' in education_lower:
                     level = 'Graduation'
-                elif '12th' in education_value:
-                    level = '12th'
-                elif '10th' in education_value:
-                    level = '10th'
                 else:
                     level = 'Other'
                 
@@ -412,9 +429,8 @@ class CandidateUpdateSerializer(serializers.ModelSerializer):
             else:
                 state, _ = FilterOption.objects.get_or_create(
                     category=state_category,
-                    name=state_value.title(),
-                    parent=country,
-                    defaults={'slug': state_value.lower().replace(' ', '-'), 'is_active': True}
+                    slug=state_value.lower().replace(' ', '-'),
+                    defaults={'name': state_value.title(), 'parent': country, 'is_active': True}
                 )
             data['state'] = state
         else:
@@ -428,9 +444,8 @@ class CandidateUpdateSerializer(serializers.ModelSerializer):
             else:
                 city, _ = FilterOption.objects.get_or_create(
                     category=city_category,
-                    name=city_value.title(),
-                    parent=state,
-                    defaults={'slug': city_value.lower(), 'is_active': True}
+                    slug=city_value.lower().replace(' ', '-'),
+                    defaults={'name': city_value.title(), 'parent': state, 'is_active': True}
                 )
                 data['city'] = city
         

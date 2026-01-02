@@ -124,6 +124,36 @@ class UnlockHistory(models.Model):
     def __str__(self):
         return f"{self.hr_user.user.email} unlocked {self.candidate}"
 
+class CandidateNote(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    hr_user = models.ForeignKey(HRProfile, on_delete=models.CASCADE, related_name='candidate_notes')
+    candidate = models.ForeignKey(Candidate, on_delete=models.CASCADE, related_name='notes')
+    note_text = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['-created_at']
+        
+    def __str__(self):
+        return f"Note by {self.hr_user.user.email} for {self.candidate.masked_name}"
+
+class CandidateFollowup(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    hr_user = models.ForeignKey(HRProfile, on_delete=models.CASCADE, related_name='candidate_followups')
+    candidate = models.ForeignKey(Candidate, on_delete=models.CASCADE, related_name='followups')
+    followup_date = models.DateTimeField()
+    notes = models.TextField(blank=True, null=True)
+    is_completed = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['followup_date']
+        
+    def __str__(self):
+        return f"Followup by {self.hr_user.user.email} for {self.candidate.masked_name} on {self.followup_date}"
+
 # Signal to auto-generate masked_name
 @receiver(pre_save, sender=Candidate)
 def generate_masked_name(sender, instance, **kwargs):

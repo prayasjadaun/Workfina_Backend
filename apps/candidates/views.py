@@ -8,11 +8,13 @@ from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 
 from apps.recruiters.models import HRProfile
 from django.contrib.auth import get_user_model
-from .models import Candidate, UnlockHistory
+from .models import Candidate, UnlockHistory, CandidateNote, CandidateFollowup
 from .serializers import (
     CandidateRegistrationSerializer,
     MaskedCandidateSerializer, 
-    FullCandidateSerializer
+    FullCandidateSerializer,
+    CandidateNoteSerializer,
+    CandidateFollowupSerializer
 )
 
 User = get_user_model()
@@ -22,7 +24,7 @@ class CandidateRegistrationView(generics.CreateAPIView):
     
     serializer_class = CandidateRegistrationSerializer
     permission_classes = [IsAuthenticated]
-    parser_classes=[MultiPartParser, FormParser, JSONParser] # ÃƒÂ¢Ã…â€œÃ¢â‚¬Â¦ Important for file uploads
+    parser_classes=[MultiPartParser, FormParser, JSONParser] # ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã¢â‚¬Â¦ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦ Important for file uploads
 
     
     def post(self, request, *args, **kwargs):
@@ -232,7 +234,7 @@ def get_candidate_profile(request):
     
     try:
         candidate = Candidate.objects.get(user=request.user)
-        serializer = FullCandidateSerializer(candidate, context={'request': request})  # ÃƒÂ¢Ã…â€œÃ¢â‚¬Â¦ Add context
+        serializer = FullCandidateSerializer(candidate, context={'request': request})  # ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã¢â‚¬Â¦ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦ Add context
         return Response(serializer.data)
     except Candidate.DoesNotExist:
         return Response({
@@ -463,6 +465,11 @@ def get_filter_options(request):
     page_size = int(request.query_params.get('page_size', 20))
     search = request.query_params.get('search', '')
     
+    # Get unlocked candidate IDs for current HR user
+    unlocked_ids = set(UnlockHistory.objects.filter(
+        hr_user=request.user.hr_profile
+    ).values_list('candidate_id', flat=True))
+    
     if filter_type:
         # Get specific filter category options
         try:
@@ -498,20 +505,34 @@ def get_filter_options(request):
             
             field_name = field_mapping.get(filter_type, filter_type)
             
+            results = []
+            for item in paginated_data:
+                total_count = Candidate.objects.filter(
+                    is_active=True,
+                    **{f"{field_name}__name": item}
+                ).count()
+                
+                unlocked_count = Candidate.objects.filter(
+                    is_active=True,
+                    id__in=unlocked_ids,
+                    **{f"{field_name}__name": item}
+                ).count()
+                
+                locked_count = total_count - unlocked_count
+                
+                results.append({
+                    'value': item,
+                    'label': item,
+                    'count': total_count,
+                    'unlocked_count': unlocked_count,
+                    'locked_count': locked_count
+                })
+            
             return Response({
                 'count': total,
                 'next': next_url,
                 'previous': previous_url,
-                'results': [
-                    {
-                        'value': item, 
-                        'label': item,
-                        'count': Candidate.objects.filter(
-                            is_active=True,
-                            **{f"{field_name}__name": item}
-                        ).count()
-                    } for item in paginated_data
-                ]
+                'results': results
             })
         except FilterCategory.DoesNotExist:
             return Response({'error': 'Invalid filter type'}, status=400)
@@ -524,10 +545,163 @@ def get_filter_options(request):
         if category.icon:
             icon_url = request.build_absolute_uri(category.icon.url)
         
+        # Map category slug to field name
+        field_mapping = {
+            'department': 'role',
+            'religion': 'religion', 
+            'country': 'country',
+            'state': 'state',
+            'city': 'city',
+            'education': 'education'
+        }
+        
+        field_name = field_mapping.get(category.slug, category.slug)
+        
+        # Get total candidates for this category
+        total_candidates = Candidate.objects.filter(
+            is_active=True,
+            **{f"{field_name}__isnull": False}
+        ).count()
+        
+        unlocked_candidates = Candidate.objects.filter(
+            is_active=True,
+            id__in=unlocked_ids,
+            **{f"{field_name}__isnull": False}
+        ).count()
+        
+        locked_candidates = total_candidates - unlocked_candidates
+        
         results[category.slug] = {
             'total_count': options_count,
             'name': category.name,
-            'icon': icon_url
+            'icon': icon_url,
+            'candidate_count': total_candidates,
+            'unlocked_count': unlocked_candidates,
+            'locked_count': locked_candidates
         }
     
     return Response({'results': results})
+
+# ========== Notes & Followups APIs ==========
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def add_candidate_note(request, candidate_id):
+    """Add note for a candidate - For HR users"""
+    
+    if request.user.role != 'hr':
+        return Response({
+            'error': 'Only HR users can add notes'
+        }, status=status.HTTP_403_FORBIDDEN)
+    
+    try:
+        candidate = Candidate.objects.get(id=candidate_id, is_active=True)
+        
+        # Check if HR has unlocked this candidate
+        if not UnlockHistory.objects.filter(hr_user=request.user.hr_profile, candidate=candidate).exists():
+            return Response({
+                'error': 'Candidate must be unlocked to add notes'
+            }, status=status.HTTP_403_FORBIDDEN)
+        
+        serializer = CandidateNoteSerializer(data=request.data)
+        if serializer.is_valid():
+            note = serializer.save(
+                hr_user=request.user.hr_profile,
+                candidate=candidate
+            )
+            return Response({
+                'success': True,
+                'message': 'Note added successfully',
+                'note': CandidateNoteSerializer(note).data
+            })
+        else:
+            return Response({
+                'error': 'Validation failed',
+                'details': serializer.errors
+            }, status=status.HTTP_400_BAD_REQUEST)
+            
+    except Candidate.DoesNotExist:
+        return Response({
+            'error': 'Candidate not found'
+        }, status=status.HTTP_404_NOT_FOUND)
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def add_candidate_followup(request, candidate_id):
+    """Add followup for a candidate - For HR users"""
+    
+    if request.user.role != 'hr':
+        return Response({
+            'error': 'Only HR users can add followups'
+        }, status=status.HTTP_403_FORBIDDEN)
+    
+    try:
+        candidate = Candidate.objects.get(id=candidate_id, is_active=True)
+        
+        # Check if HR has unlocked this candidate
+        if not UnlockHistory.objects.filter(hr_user=request.user.hr_profile, candidate=candidate).exists():
+            return Response({
+                'error': 'Candidate must be unlocked to add followups'
+            }, status=status.HTTP_403_FORBIDDEN)
+        
+        serializer = CandidateFollowupSerializer(data=request.data)
+        if serializer.is_valid():
+            followup = serializer.save(
+                hr_user=request.user.hr_profile,
+                candidate=candidate
+            )
+            return Response({
+                'success': True,
+                'message': 'Followup added successfully',
+                'followup': CandidateFollowupSerializer(followup).data
+            })
+        else:
+            return Response({
+                'error': 'Validation failed',
+                'details': serializer.errors
+            }, status=status.HTTP_400_BAD_REQUEST)
+            
+    except Candidate.DoesNotExist:
+        return Response({
+            'error': 'Candidate not found'
+        }, status=status.HTTP_404_NOT_FOUND)
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_candidate_notes_followups(request, candidate_id):
+    """Get notes and followups for a candidate - For HR users"""
+    
+    if request.user.role != 'hr':
+        return Response({
+            'error': 'Only HR users can access this'
+        }, status=status.HTTP_403_FORBIDDEN)
+    
+    try:
+        candidate = Candidate.objects.get(id=candidate_id, is_active=True)
+        
+        # Check if HR has unlocked this candidate
+        if not UnlockHistory.objects.filter(hr_user=request.user.hr_profile, candidate=candidate).exists():
+            return Response({
+                'error': 'Candidate must be unlocked to view notes and followups'
+            }, status=status.HTTP_403_FORBIDDEN)
+        
+        # Get notes and followups for this HR user and candidate
+        notes = CandidateNote.objects.filter(
+            hr_user=request.user.hr_profile,
+            candidate=candidate
+        )
+        followups = CandidateFollowup.objects.filter(
+            hr_user=request.user.hr_profile,
+            candidate=candidate
+        )
+        
+        return Response({
+            'success': True,
+            'notes': CandidateNoteSerializer(notes, many=True).data,
+            'followups': CandidateFollowupSerializer(followups, many=True).data
+        })
+        
+    except Candidate.DoesNotExist:
+        return Response({
+            'error': 'Candidate not found'
+        }, status=status.HTTP_404_NOT_FOUND)
