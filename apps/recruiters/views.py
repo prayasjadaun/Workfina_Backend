@@ -1,5 +1,3 @@
-
-
 from rest_framework import status, generics
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
@@ -101,6 +99,7 @@ def filter_candidates(request):
     skills = request.query_params.get('skills')
     min_ctc = request.query_params.get('min_ctc')
     max_ctc = request.query_params.get('max_ctc')
+    show_locked_only = request.query_params.get('show_locked_only', 'false').lower() == 'true'
     
     # Pagination
     page = int(request.query_params.get('page', 1))
@@ -169,14 +168,18 @@ def filter_candidates(request):
         except (ValueError, TypeError):
             pass
     
-    # Apply pagination
-    paginator = Paginator(queryset, page_size)
-    candidates_page = paginator.get_page(page)
-    
     # Get unlocked candidate IDs
     unlocked_ids = set(UnlockHistory.objects.filter(
         hr_user=request.user.hr_profile
     ).values_list('candidate_id', flat=True))
+    
+    # Filter to show only locked candidates if requested
+    if show_locked_only:
+        queryset = queryset.exclude(id__in=unlocked_ids)
+    
+    # Apply pagination
+    paginator = Paginator(queryset, page_size)
+    candidates_page = paginator.get_page(page)
     
     # Serialize candidates
     candidates_data = []
@@ -184,7 +187,7 @@ def filter_candidates(request):
         if candidate.id in unlocked_ids:
             serializer = FullCandidateSerializer(candidate, context={'request': request})
         else:
-            serializer = MaskedCandidateSerializer(candidate)
+            serializer = MaskedCandidateSerializer(candidate, context={'request': request})
         candidates_data.append(serializer.data)
     
     return Response({
