@@ -70,10 +70,14 @@ class Candidate(models.Model):
     # Education & Skills - Using FilterOption
     education = models.ForeignKey(FilterOption, on_delete=models.SET_NULL, null=True, blank=True, related_name='education_candidates')
     skills = models.TextField()  # Comma-separated skills
+    education_details = models.TextField(blank=True, null=True)
+
     
     # Resume & Documents
     resume = models.FileField(upload_to='resumes/', blank=True)
     video_intro = models.FileField(upload_to='video_intros/', blank=True, null=True)
+    profile_image = models.ImageField(upload_to='profile_images/', blank=True, null=True)
+
 
     # Meta Information
     is_active = models.BooleanField(default=True)
