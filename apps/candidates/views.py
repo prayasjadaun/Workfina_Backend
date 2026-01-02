@@ -244,7 +244,6 @@ def get_candidate_profile(request):
 @api_view(['PUT', 'PATCH'])
 @permission_classes([IsAuthenticated])
 @parser_classes([MultiPartParser, FormParser, JSONParser])
-
 def update_candidate_profile(request):
     """Update candidate's own profile"""
     
@@ -256,19 +255,18 @@ def update_candidate_profile(request):
     try:
         candidate = Candidate.objects.get(user=request.user)
         
-        # Update fields from request
+        # Use the same serializer with the same validation logic
         serializer = CandidateRegistrationSerializer(
             candidate, 
             data=request.data, 
-            partial=True,  # Allow partial updates
+            partial=True,
             context={'request': request}
         )
         
         if serializer.is_valid():
             serializer.save()
             
-            # Return updated profile
-            response_serializer = FullCandidateSerializer(candidate, context={'request': request})  # ÃƒÂ¢Ã…â€œÃ¢â‚¬Â¦ Add context
+            response_serializer = FullCandidateSerializer(candidate, context={'request': request})
             return Response({
                 'success': True,
                 'message': 'Profile updated successfully',
