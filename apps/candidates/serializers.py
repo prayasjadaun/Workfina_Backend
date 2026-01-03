@@ -30,13 +30,19 @@ class CandidateRegistrationSerializer(serializers.ModelSerializer):
         fields = [
             'full_name', 'phone', 'age', 'role', 'experience_years',
             'current_ctc', 'expected_ctc', 'religion', 'country',
-            'state', 'city', 'education', 'skills', 'resume', 'video_intro', 'profile_image'
+            'state', 'city', 'education', 'skills', 'resume', 'video_intro', 'profile_image',
+            'languages', 'street_address', 'willing_to_relocate', 'work_experience', 'career_objective'
         ]
         extra_kwargs = {
             'resume': {'required': False, 'allow_null': True},
             'video_intro': {'required': False, 'allow_null': True},
             'profile_image': {'required': False, 'allow_null': True},
             'education': {'required': False, 'allow_blank': True},
+            'languages': {'required': False, 'allow_blank': True},
+            'street_address': {'required': False, 'allow_blank': True},
+            'willing_to_relocate': {'required': False},
+            'work_experience': {'required': False, 'allow_blank': True},
+            'career_objective': {'required': False, 'allow_blank': True},
         }
 
     def validate(self, data):
@@ -215,7 +221,9 @@ class FullCandidateSerializer(serializers.ModelSerializer):
             'role_name', 'experience_years', 'current_ctc', 'expected_ctc',
             'religion_name', 'country_name', 'state_name', 'city_name',
             'education_name', 'education_details', 'skills', 'skills_list', 
-            'resume_url', 'video_intro_url', 'profile_image_url', 'credits_used'
+            'resume_url', 'video_intro_url', 'profile_image_url', 'credits_used',
+            'languages', 'street_address', 'willing_to_relocate', 'work_experience', 'career_objective'
+
         ]
     
     def get_skills_list(self, obj):
@@ -318,13 +326,20 @@ class CandidateUpdateSerializer(serializers.ModelSerializer):
         fields = [
             'full_name', 'phone', 'age', 'role', 'experience_years',
             'current_ctc', 'expected_ctc', 'religion', 'country',
-            'state', 'city', 'education', 'skills', 'resume', 'video_intro','profile_image','education_details' 
+            'state', 'city', 'education', 'skills', 'resume', 'video_intro','profile_image','education_details',
+            'languages', 'street_address', 'willing_to_relocate', 'work_experience', 'career_objective'
+
         ]
         extra_kwargs = {
             'resume': {'required': False, 'allow_null': True},
             'video_intro': {'required': False, 'allow_null': True},
             'profile_image': {'required': False, 'allow_null': True},
             'education_details': {'required': False, 'allow_blank': True},
+            'languages': {'required': False, 'allow_blank': True},
+            'street_address': {'required': False, 'allow_blank': True},
+            'willing_to_relocate': {'required': False},
+            'work_experience': {'required': False, 'allow_blank': True},
+            'career_objective': {'required': False, 'allow_blank': True},
         }
 
     def validate(self, data):
