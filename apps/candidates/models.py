@@ -85,10 +85,8 @@ class Candidate(models.Model):
     state = models.ForeignKey(FilterOption, on_delete=models.SET_NULL, null=True, blank=True, related_name='state_candidates')
     city = models.ForeignKey(FilterOption, on_delete=models.SET_NULL, null=True, blank=True, related_name='city_candidates')
     
-    # Education & Skills - Using FilterOption
-    education = models.ForeignKey(FilterOption, on_delete=models.SET_NULL, null=True, blank=True, related_name='education_candidates')
+    # Skills
     skills = models.TextField()  # Comma-separated skills
-    education_details = models.TextField(blank=True, null=True)
 
     
     # Resume & Documents
@@ -99,9 +97,6 @@ class Candidate(models.Model):
     languages = models.TextField(blank=True, null=True)  
     street_address = models.CharField(max_length=500, blank=True, null=True)
     willing_to_relocate = models.BooleanField(default=False)
-    
-    # Work Experience Details
-    work_experience = models.TextField(blank=True, null=True)  
     
     # Career Objective
     career_objective = models.TextField(blank=True, null=True)
@@ -162,7 +157,46 @@ class CandidateFollowup(models.Model):
         ordering = ['followup_date']
         
     def __str__(self):
-        return f"Followup by {self.hr_user.user.email} for {self.candidate.masked_name} on {self.followup_date}"
+        return f"{self.hr_user.user.email} for {self.candidate.masked_name} on {self.followup_date}"
+
+class WorkExperience(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    candidate = models.ForeignKey(Candidate, on_delete=models.CASCADE, related_name='work_experiences')
+    company_name = models.CharField(max_length=255)
+    role_title = models.CharField(max_length=255)
+    start_date = models.DateField()
+    end_date = models.DateField(null=True, blank=True)  # Null for current job
+    is_current = models.BooleanField(default=False)
+    location = models.CharField(max_length=255, blank=True)
+    description = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        ordering = ['-start_date']
+    
+    def __str__(self):
+        return f"{self.candidate.masked_name} - {self.role_title} at {self.company_name}"
+
+class Education(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    candidate = models.ForeignKey(Candidate, on_delete=models.CASCADE, related_name='educations')
+    institution_name = models.CharField(max_length=255)
+    degree = models.CharField(max_length=255)
+    field_of_study = models.CharField(max_length=255, blank=True)
+    start_year = models.PositiveIntegerField()
+    end_year = models.PositiveIntegerField(null=True, blank=True)  # Null for ongoing
+    is_ongoing = models.BooleanField(default=False)
+    grade_percentage = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    location = models.CharField(max_length=255, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        ordering = ['-start_year']
+    
+    def __str__(self):
+        return f"{self.candidate.masked_name} - {self.degree} from {self.institution_name}"
+
+
 
 # Signal to auto-generate masked_name
 @receiver(pre_save, sender=Candidate)

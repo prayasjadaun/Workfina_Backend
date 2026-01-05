@@ -1,8 +1,18 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
-from .models import Candidate, UnlockHistory, FilterCategory, FilterOption, CandidateNote, CandidateFollowup
+from .models import Candidate, UnlockHistory, FilterCategory, FilterOption, CandidateNote, CandidateFollowup, WorkExperience, Education
 
 User = get_user_model()
+
+class WorkExperienceSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = WorkExperience
+        fields = ['id', 'company_name', 'role_title', 'start_date', 'end_date', 'is_current', 'location', 'description']
+
+class EducationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Education
+        fields = ['id', 'institution_name', 'degree', 'field_of_study', 'start_year', 'end_year', 'is_ongoing', 'grade_percentage', 'location']
 
 class CandidateNoteSerializer(serializers.ModelSerializer):
     class Meta:
@@ -23,21 +33,19 @@ class CandidateRegistrationSerializer(serializers.ModelSerializer):
     country = serializers.CharField(write_only=True)
     state = serializers.CharField(write_only=True)
     city = serializers.CharField(write_only=True)
-    education = serializers.CharField(write_only=True,required=False, allow_blank=True)
     
     class Meta:
         model = Candidate
         fields = [
             'full_name', 'phone', 'age', 'role', 'experience_years',
             'current_ctc', 'expected_ctc', 'religion', 'country',
-            'state', 'city', 'education', 'skills', 'resume', 'video_intro', 'profile_image',
-            'languages', 'street_address', 'willing_to_relocate', 'work_experience', 'career_objective'
+            'state', 'city', 'skills', 'resume', 'video_intro', 'profile_image',
+            'languages', 'street_address', 'willing_to_relocate', 'career_objective'
         ]
         extra_kwargs = {
             'resume': {'required': False, 'allow_null': True},
             'video_intro': {'required': False, 'allow_null': True},
             'profile_image': {'required': False, 'allow_null': True},
-            'education': {'required': False, 'allow_blank': True},
             'languages': {'required': False, 'allow_blank': True},
             'street_address': {'required': False, 'allow_blank': True},
             'willing_to_relocate': {'required': False},
@@ -67,10 +75,6 @@ class CandidateRegistrationSerializer(serializers.ModelSerializer):
             slug='city',
             defaults={'name': 'City', 'display_order': 5}
         )
-        education_category, _ = FilterCategory.objects.get_or_create(
-            slug='education',
-            defaults={'name': 'Education', 'display_order': 6}
-        )
 
         # Create/get role - Check if already FilterOption
         role_name = data.get('role')
@@ -97,32 +101,6 @@ class CandidateRegistrationSerializer(serializers.ModelSerializer):
                     defaults={'slug': religion_name.lower(), 'is_active': True}
                 )
                 data['religion'] = religion
-
-        # Create/get education - Check if already FilterOption
-        education_name = data.get('education')
-        if education_name:
-            if isinstance(education_name, FilterOption):
-                data['education'] = education_name
-            else:
-                # Store original education details
-                data['education_details'] = education_name
-                
-                education_lower = education_name.lower()
-                if 'post-graduation' in education_lower or 'mca' in education_lower or 'mba' in education_lower or 'master' in education_lower:
-                    normalized_education = 'Post Graduation'
-                elif 'graduation' in education_lower or 'bca' in education_lower or 'b.tech' in education_lower or 'bachelor' in education_lower:
-                    normalized_education = 'Graduation'
-                else:
-                    normalized_education = 'Other'
-                
-                education, _ = FilterOption.objects.get_or_create(
-                    category=education_category,
-                    name=normalized_education,
-                    defaults={'slug': normalized_education.lower().replace(' ', '-'), 'is_active': True}
-                )
-                data['education'] = education
-        else:
-            data['education'] = None
 
         # Default country to India - Check if already FilterOption
         country_name = data.get('country', 'India')
@@ -212,7 +190,10 @@ class FullCandidateSerializer(serializers.ModelSerializer):
     country_name = serializers.CharField(source='country.name', read_only=True)
     state_name = serializers.CharField(source='state.name', read_only=True)
     city_name = serializers.CharField(source='city.name', read_only=True)
-    education_name = serializers.CharField(source='education.name', read_only=True)
+    
+    # Add work experience and education data
+    work_experiences = WorkExperienceSerializer(many=True, read_only=True)
+    educations = EducationSerializer(many=True, read_only=True)
 
     class Meta:
         model = Candidate
@@ -220,10 +201,10 @@ class FullCandidateSerializer(serializers.ModelSerializer):
             'id', 'full_name', 'email', 'phone', 'age',
             'role_name', 'experience_years', 'current_ctc', 'expected_ctc',
             'religion_name', 'country_name', 'state_name', 'city_name',
-            'education_name', 'education_details', 'skills', 'skills_list', 
+            'skills', 'skills_list', 
             'resume_url', 'video_intro_url', 'profile_image_url', 'credits_used',
-            'languages', 'street_address', 'willing_to_relocate', 'work_experience', 'career_objective'
-
+            'languages', 'street_address', 'willing_to_relocate', 'career_objective',
+            'work_experiences', 'educations'
         ]
     
     def get_skills_list(self, obj):
@@ -319,14 +300,13 @@ class CandidateUpdateSerializer(serializers.ModelSerializer):
     country = serializers.CharField(required=False)
     state = serializers.CharField(required=False)
     city = serializers.CharField(required=False)
-    education = serializers.CharField(required=False)
     
     class Meta:
         model = Candidate
         fields = [
             'full_name', 'phone', 'age', 'role', 'experience_years',
             'current_ctc', 'expected_ctc', 'religion', 'country',
-            'state', 'city', 'education', 'skills', 'resume', 'video_intro','profile_image','education_details',
+            'state', 'city', 'skills', 'resume', 'video_intro','profile_image',
             'languages', 'street_address', 'willing_to_relocate', 'work_experience', 'career_objective'
 
         ]
@@ -334,7 +314,6 @@ class CandidateUpdateSerializer(serializers.ModelSerializer):
             'resume': {'required': False, 'allow_null': True},
             'video_intro': {'required': False, 'allow_null': True},
             'profile_image': {'required': False, 'allow_null': True},
-            'education_details': {'required': False, 'allow_blank': True},
             'languages': {'required': False, 'allow_blank': True},
             'street_address': {'required': False, 'allow_blank': True},
             'willing_to_relocate': {'required': False},
@@ -369,10 +348,6 @@ class CandidateUpdateSerializer(serializers.ModelSerializer):
             slug='city',
             defaults={'name': 'City', 'display_order': 5}
         )
-        education_category, _ = FilterCategory.objects.get_or_create(
-            slug='education',
-            defaults={'name': 'Education', 'display_order': 6}
-        )
         
         # Convert role - check if it's already a FilterOption
         role_value = data.get('role')
@@ -399,30 +374,6 @@ class CandidateUpdateSerializer(serializers.ModelSerializer):
                     defaults={'slug': religion_value.lower(), 'is_active': True}
                 )
                 data['religion'] = religion
-        
-        # Convert education - check if it's already a FilterOption
-        education_value = data.get('education')
-        if education_value:
-            if isinstance(education_value, FilterOption):
-                data['education'] = education_value
-            else:
-                # Store original education details
-                data['education_details'] = education_value
-                
-                education_lower = education_value.lower()
-                if 'post-graduation' in education_lower or 'mca' in education_lower or 'mba' in education_lower:
-                    level = 'Post Graduation'
-                elif 'graduation' in education_lower or 'bca' in education_lower or 'b.tech' in education_lower:
-                    level = 'Graduation'
-                else:
-                    level = 'Other'
-                
-                education, _ = FilterOption.objects.get_or_create(
-                    category=education_category,
-                    name=level,
-                    defaults={'slug': level.lower().replace(' ', '-'), 'is_active': True}
-                )
-                data['education'] = education
         
         # Default country to India
         country_value = data.get('country', 'India')

@@ -24,7 +24,7 @@ class CandidateRegistrationView(generics.CreateAPIView):
     
     serializer_class = CandidateRegistrationSerializer
     permission_classes = [IsAuthenticated]
-    parser_classes=[MultiPartParser, FormParser, JSONParser] # ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã¢â‚¬Â¦ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦ Important for file uploads
+    parser_classes=[MultiPartParser, FormParser, JSONParser]
 
     
     def post(self, request, *args, **kwargs):
@@ -309,6 +309,7 @@ def filter_candidates(request):
     
     # Get filter parameters
     role = request.query_params.get('role')
+    name = request.query_params.get('name')
     min_experience = request.query_params.get('min_experience')
     max_experience = request.query_params.get('max_experience')
     min_age = request.query_params.get('min_age')
@@ -349,6 +350,8 @@ def filter_candidates(request):
         
     if education:
         queryset = queryset.filter(education__name__iexact=education)
+    if name:
+        queryset = queryset.filter(full_name__icontains=name)
         
     if min_experience:
         try:
@@ -373,21 +376,6 @@ def filter_candidates(request):
             queryset = queryset.filter(age__lte=int(max_age))
         except ValueError:
             pass
-            
-    if city:
-        queryset = queryset.filter(city__name__icontains=city)
-        
-    if state:
-        queryset = queryset.filter(state__name__icontains=state)
-        
-    if country:
-        queryset = queryset.filter(country__name__icontains=country)
-        
-    if religion and religion != 'All':
-        queryset = queryset.filter(religion__name__iexact=religion)
-        
-    if education:
-        queryset = queryset.filter(education__name__icontains=education)
         
     if skills:
         queryset = queryset.filter(skills__icontains=skills)
