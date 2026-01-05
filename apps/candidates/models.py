@@ -96,12 +96,12 @@ class Candidate(models.Model):
     video_intro = models.FileField(upload_to='video_intros/', blank=True, null=True)
     profile_image = models.ImageField(upload_to='profile_images/', blank=True, null=True)
 
-    languages = models.TextField(blank=True, null=True)  # Comma-separated languages
+    languages = models.TextField(blank=True, null=True)  
     street_address = models.CharField(max_length=500, blank=True, null=True)
     willing_to_relocate = models.BooleanField(default=False)
     
     # Work Experience Details
-    work_experience = models.TextField(blank=True, null=True)  # JSON or structured text
+    work_experience = models.TextField(blank=True, null=True)  
     
     # Career Objective
     career_objective = models.TextField(blank=True, null=True)
