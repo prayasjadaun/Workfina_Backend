@@ -287,7 +287,7 @@ class FilterOptionSerializer(serializers.ModelSerializer):
         from django.db.models import Q
         count = Candidate.objects.filter(
             Q(role=obj) | Q(religion=obj) | Q(country=obj) | 
-            Q(state=obj) | Q(city=obj) | Q(education=obj),
+            Q(state=obj) | Q(city=obj),
             is_active=True
         ).count()
         return count

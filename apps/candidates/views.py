@@ -234,7 +234,7 @@ def get_candidate_profile(request):
     
     try:
         candidate = Candidate.objects.get(user=request.user)
-        serializer = FullCandidateSerializer(candidate, context={'request': request})  # ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã¢â‚¬Â¦ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦ Add context
+        serializer = FullCandidateSerializer(candidate, context={'request': request})  # ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã¢â‚¬Å“ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¦ Add context
         return Response(serializer.data)
     except Candidate.DoesNotExist:
         return Response({
@@ -318,7 +318,6 @@ def filter_candidates(request):
     state = request.query_params.get('state')
     country = request.query_params.get('country')
     religion = request.query_params.get('religion')
-    education = request.query_params.get('education')
     skills = request.query_params.get('skills')
     min_ctc = request.query_params.get('min_ctc')
     max_ctc = request.query_params.get('max_ctc')
@@ -329,7 +328,7 @@ def filter_candidates(request):
     
     # Base queryset
     queryset = Candidate.objects.filter(is_active=True).select_related(
-        'role', 'religion', 'country', 'state', 'city', 'education'
+        'role', 'religion', 'country', 'state', 'city'
     )
     
     # Apply dynamic filters - Updated for FilterOption model
@@ -348,8 +347,6 @@ def filter_candidates(request):
     if city:
         queryset = queryset.filter(city__name__iexact=city)
         
-    if education:
-        queryset = queryset.filter(education__name__iexact=education)
     if name:
         queryset = queryset.filter(full_name__icontains=name)
         
@@ -428,7 +425,6 @@ def filter_candidates(request):
             'age_range': f"{min_age}-{max_age}",
             'location': f"{city}, {state}, {country}",
             'religion': religion,
-            'education': education,
             'skills': skills,
             'ctc_range': f"{min_ctc}-{max_ctc}"
         }
@@ -487,34 +483,43 @@ def get_filter_options(request):
                 'religion': 'religion', 
                 'country': 'country',
                 'state': 'state',
-                'city': 'city',
-                'education': 'education'
+                'city': 'city'
             }
             
-            field_name = field_mapping.get(filter_type, filter_type)
+            field_name = field_mapping.get(filter_type)
             
             results = []
-            for item in paginated_data:
-                total_count = Candidate.objects.filter(
-                    is_active=True,
-                    **{f"{field_name}__name": item}
-                ).count()
-                
-                unlocked_count = Candidate.objects.filter(
-                    is_active=True,
-                    id__in=unlocked_ids,
-                    **{f"{field_name}__name": item}
-                ).count()
-                
-                locked_count = total_count - unlocked_count
-                
-                results.append({
+            if field_name:
+                for item in paginated_data:
+                    total_count = Candidate.objects.filter(
+                        is_active=True,
+                        **{f"{field_name}__name": item}
+                    ).count()
+                    
+                    unlocked_count = Candidate.objects.filter(
+                        is_active=True,
+                        id__in=unlocked_ids,
+                        **{f"{field_name}__name": item}
+                    ).count()
+                    
+                    locked_count = total_count - unlocked_count
+                    
+                    results.append({
+                        'value': item,
+                        'label': item,
+                        'count': total_count,
+                        'unlocked_count': unlocked_count,
+                        'locked_count': locked_count
+                    })
+            else:
+                # For education or other unmapped fields
+                results = [{
                     'value': item,
                     'label': item,
-                    'count': total_count,
-                    'unlocked_count': unlocked_count,
-                    'locked_count': locked_count
-                })
+                    'count': 0,
+                    'unlocked_count': 0,
+                    'locked_count': 0
+                } for item in paginated_data]
             
             return Response({
                 'count': total,
@@ -539,23 +544,26 @@ def get_filter_options(request):
             'religion': 'religion', 
             'country': 'country',
             'state': 'state',
-            'city': 'city',
-            'education': 'education'
+            'city': 'city'
         }
         
-        field_name = field_mapping.get(category.slug, category.slug)
+        field_name = field_mapping.get(category.slug)
         
         # Get total candidates for this category
-        total_candidates = Candidate.objects.filter(
-            is_active=True,
-            **{f"{field_name}__isnull": False}
-        ).count()
-        
-        unlocked_candidates = Candidate.objects.filter(
-            is_active=True,
-            id__in=unlocked_ids,
-            **{f"{field_name}__isnull": False}
-        ).count()
+        if field_name:
+            total_candidates = Candidate.objects.filter(
+                is_active=True,
+                **{f"{field_name}__isnull": False}
+            ).count()
+            
+            unlocked_candidates = Candidate.objects.filter(
+                is_active=True,
+                id__in=unlocked_ids,
+                **{f"{field_name}__isnull": False}
+            ).count()
+        else:
+            total_candidates = 0
+            unlocked_candidates = 0
         
         locked_candidates = total_candidates - unlocked_candidates
         
@@ -693,5 +701,3 @@ def get_candidate_notes_followups(request, candidate_id):
         return Response({
             'error': 'Candidate not found'
         }, status=status.HTTP_404_NOT_FOUND)
-    
-    
