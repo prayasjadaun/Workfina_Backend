@@ -12,4 +12,5 @@ urlpatterns = [
     path('<uuid:candidate_id>/note/', add_candidate_note, name='add-candidate-note'),
     path('<uuid:candidate_id>/followup/', add_candidate_followup, name='add-candidate-followup'),
     path('<uuid:candidate_id>/notes-followups/', get_candidate_notes_followups, name='get-candidate-notes-followups'),
+    
 ]

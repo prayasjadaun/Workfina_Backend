@@ -705,3 +705,5 @@ def get_candidate_notes_followups(request, candidate_id):
         return Response({
             'error': 'Candidate not found'
         }, status=status.HTTP_404_NOT_FOUND)
+    
+    
