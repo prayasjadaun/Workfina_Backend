@@ -256,7 +256,7 @@ def update_candidate_profile(request):
         candidate = Candidate.objects.get(user=request.user)
         
        # Handle work experience if provided
-        work_experience_data = request.data.get('work_experience')
+        work_experience_data = request.data.get('work_experiences')
         if work_experience_data:
             candidate.work_experiences.all().delete()
             
@@ -267,7 +267,6 @@ def update_candidate_profile(request):
                 # Clean the string to make it valid JSON
                 clean_data = re.sub(r'(\w+):', r'"\1":', work_experience_data)
                 clean_data = re.sub(r': ([^",\[\]{}]+)([,}])', r': "\1"\2', clean_data)
-                # Handle boolean values properly
                 clean_data = clean_data.replace(': "true"', ': true').replace(': "false"', ': false').replace(': "null"', ': null')
                 
                 work_exp_list = json.loads(clean_data)
@@ -285,8 +284,8 @@ def update_candidate_profile(request):
             except Exception as e:
                 print(f"Work experience parsing error: {e}")
 
-        # Handle education if provided
-        education_data = request.data.get('education')
+        # Handle education if provided  
+        education_data = request.data.get('educations')
         if education_data:
             candidate.educations.all().delete()
             
@@ -294,7 +293,6 @@ def update_candidate_profile(request):
                 import json
                 import re
                 
-                # Clean the string to make it valid JSON
                 clean_data = re.sub(r'(\w+):', r'"\1":', education_data)
                 clean_data = re.sub(r': ([^",\[\]{}]+)([,}])', r': "\1"\2', clean_data)
                 
