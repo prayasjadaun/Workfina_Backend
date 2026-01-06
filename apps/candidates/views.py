@@ -8,7 +8,7 @@ from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 
 from apps.recruiters.models import HRProfile
 from django.contrib.auth import get_user_model
-from .models import Candidate, UnlockHistory, CandidateNote, CandidateFollowup
+from .models import *
 from .serializers import (
     CandidateRegistrationSerializer,
     MaskedCandidateSerializer, 
@@ -241,8 +241,6 @@ def get_candidate_profile(request):
             'error': 'Profile not found'
         }, status=status.HTTP_404_NOT_FOUND)
     
-    # Add this to your views.py
-
 @api_view(['PUT', 'PATCH'])
 @permission_classes([IsAuthenticated])
 @parser_classes([MultiPartParser, FormParser, JSONParser])
@@ -257,10 +255,74 @@ def update_candidate_profile(request):
     try:
         candidate = Candidate.objects.get(user=request.user)
         
+       # Handle work experience if provided
+        work_experience_data = request.data.get('work_experience')
+        if work_experience_data:
+            candidate.work_experiences.all().delete()
+            
+            try:
+                import json
+                import re
+                
+                # Clean the string to make it valid JSON
+                clean_data = re.sub(r'(\w+):', r'"\1":', work_experience_data)
+                clean_data = re.sub(r': ([^",\[\]{}]+)([,}])', r': "\1"\2', clean_data)
+                # Handle boolean values properly
+                clean_data = clean_data.replace(': "true"', ': true').replace(': "false"', ': false').replace(': "null"', ': null')
+                
+                work_exp_list = json.loads(clean_data)
+                for exp_data in work_exp_list:
+                    WorkExperience.objects.create(
+                        candidate=candidate,
+                        company_name=exp_data.get('company_name', ''),
+                        role_title=exp_data.get('job_role', ''),
+                        start_date=f"{exp_data.get('start_year')}-{_month_to_number(exp_data.get('start_month'))}-01",
+                        end_date=f"{exp_data.get('end_year')}-{_month_to_number(exp_data.get('end_month'))}-01" if not exp_data.get('is_current') and exp_data.get('end_year') not in [None, 'null'] else None,
+                        is_current=exp_data.get('is_current', False),
+                        location='',
+                        description=''
+                    )
+            except Exception as e:
+                print(f"Work experience parsing error: {e}")
+
+        # Handle education if provided
+        education_data = request.data.get('education')
+        if education_data:
+            candidate.educations.all().delete()
+            
+            try:
+                import json
+                import re
+                
+                # Clean the string to make it valid JSON
+                clean_data = re.sub(r'(\w+):', r'"\1":', education_data)
+                clean_data = re.sub(r': ([^",\[\]{}]+)([,}])', r': "\1"\2', clean_data)
+                
+                edu_list = json.loads(clean_data)
+                for edu_data in edu_list:
+                    Education.objects.create(
+                        candidate=candidate,
+                        institution_name=edu_data.get('school', ''),
+                        degree=edu_data.get('degree', ''),
+                        field_of_study=edu_data.get('field', ''),
+                        start_year=int(edu_data.get('start_year', 2020)),
+                        end_year=int(edu_data.get('end_year', 2024)),
+                        is_ongoing=False,
+                        grade_percentage=float(edu_data.get('grade', '0').replace('%', '')) if edu_data.get('grade') else None,
+                        location=''
+                    )
+            except Exception as e:
+                print(f"Education parsing error: {e}")
+        
+        # Remove work_experience and education from request.data for candidate update
+        candidate_data = request.data.copy()
+        candidate_data.pop('work_experience', None)
+        candidate_data.pop('education', None)
+        
         # Use the same serializer with the same validation logic
         serializer = CandidateRegistrationSerializer(
             candidate, 
-            data=request.data, 
+            data=candidate_data, 
             partial=True,
             context={'request': request}
         )
@@ -284,152 +346,15 @@ def update_candidate_profile(request):
         return Response({
             'error': 'Profile not found'
         }, status=status.HTTP_404_NOT_FOUND)
-        
-        
-@api_view(['GET'])
-@permission_classes([IsAuthenticated])
-def filter_candidates(request):
-    """Filter candidates API for HR users"""
-    
-    if request.user.role != 'hr':
-        return Response({
-            'error': 'Only HR users can access this'
-        }, status=status.HTTP_403_FORBIDDEN)
-    
-    try:
-        hr_profile = request.user.hr_profile
-        if not hr_profile.is_verified:
-            return Response({
-                'error': 'Company verification pending. Cannot view candidates.'
-            }, status=status.HTTP_403_FORBIDDEN)
-    except HRProfile.DoesNotExist:
-        return Response({
-            'error': 'HR profile not found'
-        }, status=status.HTTP_404_NOT_FOUND)
-    
-    # Get filter parameters
-    role = request.query_params.get('role')
-    name = request.query_params.get('name')
-    min_experience = request.query_params.get('min_experience')
-    max_experience = request.query_params.get('max_experience')
-    min_age = request.query_params.get('min_age')
-    max_age = request.query_params.get('max_age')
-    city = request.query_params.get('city')
-    state = request.query_params.get('state')
-    country = request.query_params.get('country')
-    religion = request.query_params.get('religion')
-    skills = request.query_params.get('skills')
-    min_ctc = request.query_params.get('min_ctc')
-    max_ctc = request.query_params.get('max_ctc')
-    
-    # Pagination
-    page = int(request.query_params.get('page', 1))
-    page_size = int(request.query_params.get('page_size', 20))
-    
-    # Base queryset
-    queryset = Candidate.objects.filter(is_active=True).select_related(
-        'role', 'religion', 'country', 'state', 'city'
-    )
-    
-    # Apply dynamic filters - Updated for FilterOption model
-    if role and role != 'All':
-        queryset = queryset.filter(role__name__iexact=role)
-        
-    if religion:
-        queryset = queryset.filter(religion__name__iexact=religion)
-        
-    if country:
-        queryset = queryset.filter(country__name__iexact=country)
-        
-    if state:
-        queryset = queryset.filter(state__name__iexact=state)
-        
-    if city:
-        queryset = queryset.filter(city__name__iexact=city)
-        
-    if name:
-        queryset = queryset.filter(full_name__icontains=name)
-        
-    if min_experience:
-        try:
-            queryset = queryset.filter(experience_years__gte=int(min_experience))
-        except ValueError:
-            pass
-            
-    if max_experience:
-        try:
-            queryset = queryset.filter(experience_years__lte=int(max_experience))
-        except ValueError:
-            pass
-            
-    if min_age:
-        try:
-            queryset = queryset.filter(age__gte=int(min_age))
-        except ValueError:
-            pass
-            
-    if max_age:
-        try:
-            queryset = queryset.filter(age__lte=int(max_age))
-        except ValueError:
-            pass
-        
-    if skills:
-        queryset = queryset.filter(skills__icontains=skills)
-        
-    if min_ctc:
-        try:
-            queryset = queryset.filter(expected_ctc__gte=float(min_ctc))
-        except (ValueError, TypeError):
-            pass
-            
-    if max_ctc:
-        try:
-            queryset = queryset.filter(expected_ctc__lte=float(max_ctc))
-        except (ValueError, TypeError):
-            pass
-    
-    # Apply pagination
-    from django.core.paginator import Paginator
-    paginator = Paginator(queryset, page_size)
-    candidates_page = paginator.get_page(page)
-    
-    # Get unlocked candidate IDs
-    unlocked_ids = set(UnlockHistory.objects.filter(
-        hr_user=request.user.hr_profile
-    ).values_list('candidate_id', flat=True))
-    
-    # Serialize candidates
-    candidates_data = []
-    for candidate in candidates_page:
-        if candidate.id in unlocked_ids:
-            serializer = FullCandidateSerializer(candidate, context={'request': request})
-        else:
-            serializer = MaskedCandidateSerializer(candidate)
-        candidates_data.append(serializer.data)
-    
-    return Response({
-        'success': True,
-        'candidates': candidates_data,
-        'pagination': {
-            'current_page': page,
-            'page_size': page_size,
-            'total_pages': paginator.num_pages,
-            'total_count': paginator.count,
-            'has_next': candidates_page.has_next(),
-            'has_previous': candidates_page.has_previous(),
-        },
-        'filters_applied': {
-            'role': role,
-            'experience_range': f"{min_experience}-{max_experience}",
-            'age_range': f"{min_age}-{max_age}",
-            'location': f"{city}, {state}, {country}",
-            'religion': religion,
-            'skills': skills,
-            'ctc_range': f"{min_ctc}-{max_ctc}"
-        }
-    })        
-    
+
+def _month_to_number(month_name):
+    """Convert month name to number"""
+    months = {
+        'January': '01', 'February': '02', 'March': '03', 'April': '04',
+        'May': '05', 'June': '06', 'July': '07', 'August': '08',
+        'September': '09', 'October': '10', 'November': '11', 'December': '12'
+    }
+    return months.get(month_name, '01')    
     
     
 @api_view(['GET'])
