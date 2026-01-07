@@ -9,6 +9,7 @@ urlpatterns = [
     path('<uuid:candidate_id>/unlock/', unlock_candidate, name='unlock-candidate'),
     path('unlocked/', get_unlocked_candidates, name='unlocked-candidates'),
     path('filter-options/', get_filter_options, name='candidate-filter-options'),
+    path('filter-categories/', get_filter_categories, name='filter-categories'),
     path('<uuid:candidate_id>/note/', add_candidate_note, name='add-candidate-note'),
     path('<uuid:candidate_id>/followup/', add_candidate_followup, name='add-candidate-followup'),
     path('<uuid:candidate_id>/notes-followups/', get_candidate_notes_followups, name='get-candidate-notes-followups'),

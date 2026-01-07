@@ -248,7 +248,8 @@ class FilterCategorySerializer(serializers.ModelSerializer):
         model = FilterCategory
         fields = [
             'id', 'name', 'slug', 'icon_url', 'display_order', 
-            'is_active', 'options_count', 'created_at'
+            'is_active', 'options_count', 'created_at', 
+            'bento_grid', 'dashboard_display', 'inner_filter'
         ]
     
     def get_options_count(self, obj):

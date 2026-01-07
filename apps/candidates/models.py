@@ -34,6 +34,9 @@ class FilterCategory(models.Model):
     display_order = models.PositiveIntegerField(default=0)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    bento_grid = models.PositiveIntegerField(default=0)
+    dashboard_display = models.PositiveIntegerField(default=0)
+    inner_filter = models.PositiveIntegerField(default=0)
     
     class Meta:
         ordering = ['display_order', 'name']
@@ -51,6 +54,7 @@ class FilterOption(models.Model):
     display_order = models.PositiveIntegerField(default=0)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    
     
     class Meta:
         ordering = ['display_order', 'name']

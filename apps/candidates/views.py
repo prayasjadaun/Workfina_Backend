@@ -14,7 +14,8 @@ from .serializers import (
     MaskedCandidateSerializer, 
     FullCandidateSerializer,
     CandidateNoteSerializer,
-    CandidateFollowupSerializer
+    CandidateFollowupSerializer,
+    FilterCategorySerializer
 )
 
 User = get_user_model()
@@ -234,7 +235,7 @@ def get_candidate_profile(request):
     
     try:
         candidate = Candidate.objects.get(user=request.user)
-        serializer = FullCandidateSerializer(candidate, context={'request': request})  # ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã¢â‚¬Å“ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¦ Add context
+        serializer = FullCandidateSerializer(candidate, context={'request': request})  
         return Response(serializer.data)
     except Candidate.DoesNotExist:
         return Response({
@@ -377,20 +378,33 @@ def get_filter_options(request):
         hr_user=request.user.hr_profile
     ).values_list('candidate_id', flat=True))
     
-    if filter_type:
-        # Get specific filter category options
+    # Map filter_type to correct field name
+    field_mapping = {
+        'department': 'role',
+        'religion': 'religion', 
+        'country': 'country',
+        'state': 'state',
+        'city': 'city',
+        'display_order':'display_order'
+    }
+    
+    if filter_type and filter_type != 'all':
+        # Get specific filter category options with subcategories
         try:
             category = FilterCategory.objects.get(slug=filter_type, is_active=True)
-            queryset = FilterOption.objects.filter(category=category, is_active=True)
+            queryset = FilterOption.objects.filter(category=category, is_active=True).order_by('display_order', 'name')
             
             if search:
                 queryset = queryset.filter(name__icontains=search)
             
-            data = list(queryset.values_list('name', flat=True))
-            total = len(data)
+            # Get all options with their subcategories
+            all_options = list(queryset)
+            
+            # Paginate
+            total = len(all_options)
             start = (page - 1) * page_size
             end = start + page_size
-            paginated_data = data[start:end]
+            paginated_options = all_options[start:end]
             total_pages = (total + page_size - 1) // page_size
             
             base_url = f"/api/candidates/filter-options/?type={filter_type}&page_size={page_size}"
@@ -400,49 +414,61 @@ def get_filter_options(request):
             next_url = f"{base_url}&page={page + 1}" if page < total_pages else None
             previous_url = f"{base_url}&page={page - 1}" if page > 1 else None
             
-            # Map filter_type to correct field name
-            field_mapping = {
-                'department': 'role',
-                'religion': 'religion', 
-                'country': 'country',
-                'state': 'state',
-                'city': 'city'
-            }
-            
             field_name = field_mapping.get(filter_type)
             
             results = []
-            if field_name:
-                for item in paginated_data:
+            for option in paginated_options:
+                if field_name:
                     total_count = Candidate.objects.filter(
                         is_active=True,
-                        **{f"{field_name}__name": item}
+                        **{f"{field_name}": option}
                     ).count()
                     
                     unlocked_count = Candidate.objects.filter(
                         is_active=True,
                         id__in=unlocked_ids,
-                        **{f"{field_name}__name": item}
+                        **{f"{field_name}": option}
                     ).count()
                     
                     locked_count = total_count - unlocked_count
+                else:
+                    total_count = unlocked_count = locked_count = 0
+                
+                # Get subcategories (children) if any
+                subcategories = []
+                for child in FilterOption.objects.filter(parent=option, is_active=True).order_by('display_order', 'name'):
+                    if field_name:
+                        child_total = Candidate.objects.filter(
+                            is_active=True,
+                            **{f"{field_name}": child}
+                        ).count()
+                        
+                        child_unlocked = Candidate.objects.filter(
+                            is_active=True,
+                            id__in=unlocked_ids,
+                            **{f"{field_name}": child}
+                        ).count()
+                        
+                        child_locked = child_total - child_unlocked
+                    else:
+                        child_total = child_unlocked = child_locked = 0
                     
-                    results.append({
-                        'value': item,
-                        'label': item,
-                        'count': total_count,
-                        'unlocked_count': unlocked_count,
-                        'locked_count': locked_count
+                    subcategories.append({
+                        'value': child.name,
+                        'label': child.name,
+                        'count': child_total,
+                        'unlocked_count': child_unlocked,
+                        'locked_count': child_locked
                     })
-            else:
-                # For education or other unmapped fields
-                results = [{
-                    'value': item,
-                    'label': item,
-                    'count': 0,
-                    'unlocked_count': 0,
-                    'locked_count': 0
-                } for item in paginated_data]
+                
+                results.append({
+                    'value': option.name,
+                    'label': option.name,
+                    'count': total_count,
+                    'unlocked_count': unlocked_count,
+                    'locked_count': locked_count,
+                    'subcategories': subcategories
+                })
             
             return Response({
                 'count': total,
@@ -453,53 +479,120 @@ def get_filter_options(request):
         except FilterCategory.DoesNotExist:
             return Response({'error': 'Invalid filter type'}, status=400)
     
-    # Return all categories with counts
+    # Return all categories with their subcategories and counts
+    all_categories = FilterCategory.objects.filter(is_active=True).order_by('display_order', 'name')
+    
     results = {}
-    for category in FilterCategory.objects.filter(is_active=True):
+    
+    # Add "all" option showing total counts across all categories
+    total_candidates = Candidate.objects.filter(is_active=True).count()
+    total_unlocked = Candidate.objects.filter(is_active=True, id__in=unlocked_ids).count()
+    total_locked = total_candidates - total_unlocked
+    
+    results['all'] = {
+        'total_count': sum(FilterOption.objects.filter(category=cat, is_active=True).count() for cat in all_categories),
+        'name': 'All Categories',
+        'icon': None,
+        'candidate_count': total_candidates,
+        'unlocked_count': total_unlocked,
+        'locked_count': total_locked,
+        'subcategories': {}
+    }
+    
+    # Add each category with subcategories
+    for category in all_categories:
         options_count = FilterOption.objects.filter(category=category, is_active=True).count()
         icon_url = None
         if category.icon:
             icon_url = request.build_absolute_uri(category.icon.url)
         
-        # Map category slug to field name
-        field_mapping = {
-            'department': 'role',
-            'religion': 'religion', 
-            'country': 'country',
-            'state': 'state',
-            'city': 'city'
-        }
-        
         field_name = field_mapping.get(category.slug)
         
         # Get total candidates for this category
         if field_name:
-            total_candidates = Candidate.objects.filter(
+            category_candidates = Candidate.objects.filter(
                 is_active=True,
                 **{f"{field_name}__isnull": False}
             ).count()
             
-            unlocked_candidates = Candidate.objects.filter(
+            category_unlocked = Candidate.objects.filter(
                 is_active=True,
                 id__in=unlocked_ids,
                 **{f"{field_name}__isnull": False}
             ).count()
         else:
-            total_candidates = 0
-            unlocked_candidates = 0
+            category_candidates = 0
+            category_unlocked = 0
         
-        locked_candidates = total_candidates - unlocked_candidates
+        category_locked = category_candidates - category_unlocked
+        
+        # Get subcategories with counts
+        subcategories = {}
+        for option in FilterOption.objects.filter(category=category, is_active=True).order_by('display_order', 'name'):
+            if field_name:
+                option_total = Candidate.objects.filter(
+                    is_active=True,
+                    **{f"{field_name}": option}
+                ).count()
+                
+                option_unlocked = Candidate.objects.filter(
+                    is_active=True,
+                    id__in=unlocked_ids,
+                    **{f"{field_name}": option}
+                ).count()
+                
+                option_locked = option_total - option_unlocked
+            else:
+                option_total = option_unlocked = option_locked = 0
+            
+            subcategories[option.slug] = {
+                'name': option.name,
+                'candidate_count': option_total,
+                'unlocked_count': option_unlocked,
+                'locked_count': option_locked
+            }
         
         results[category.slug] = {
             'total_count': options_count,
             'name': category.name,
             'icon': icon_url,
-            'candidate_count': total_candidates,
-            'unlocked_count': unlocked_candidates,
-            'locked_count': locked_candidates
+            'candidate_count': category_candidates,
+            'unlocked_count': category_unlocked,
+            'locked_count': category_locked,
+            'subcategories': subcategories
+        }
+        
+        # Add subcategories to "all" option
+        results['all']['subcategories'][category.slug] = {
+            'name': category.name,
+            'icon': icon_url,
+            'candidate_count': category_candidates,
+            'unlocked_count': category_unlocked,
+            'locked_count': category_locked,
+            'options': subcategories
         }
     
     return Response({'results': results})
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_filter_categories(request):
+    """Get all filter categories"""
+    
+    if request.user.role != 'hr':
+        return Response({
+            'error': 'Only HR users can access this'
+        }, status=status.HTTP_403_FORBIDDEN)
+    
+    from .models import FilterCategory
+    
+    categories = FilterCategory.objects.filter(is_active=True).order_by('display_order', 'name')
+    serializer = FilterCategorySerializer(categories, many=True, context={'request': request})
+    
+    return Response({
+        'success': True,
+        'filter_categories': serializer.data
+    })
 
 # ========== Notes & Followups APIs ==========
 
