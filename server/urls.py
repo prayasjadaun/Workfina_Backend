@@ -25,6 +25,7 @@ urlpatterns = [
     path('api/candidates/', include('apps.candidates.urls')),
     path('api/recruiters/', include('apps.recruiters.urls')),
     path('api/wallet/', include('apps.wallet.urls')),
+    path('api/banner/', include('apps.banners.urls')),
 
     path('swagger/', schema_view.with_ui('swagger', cache_timeout=0), name='swagger-ui'),
     path('redoc/', schema_view.with_ui('redoc', cache_timeout=0), name='redoc'),

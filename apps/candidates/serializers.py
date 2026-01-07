@@ -27,7 +27,6 @@ class CandidateFollowupSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'created_at', 'updated_at']
 
 class CandidateRegistrationSerializer(serializers.ModelSerializer):
-    # Accept strings for foreign key fields
     role = serializers.CharField(write_only=True)
     religion = serializers.CharField(write_only=True)
     country = serializers.CharField(write_only=True)
@@ -54,7 +53,6 @@ class CandidateRegistrationSerializer(serializers.ModelSerializer):
         }
 
     def validate(self, data):
-        # Create/get categories first (with default creation if not exist)
         dept_category, _ = FilterCategory.objects.get_or_create(
             slug='department',
             defaults={'name': 'Department', 'display_order': 1}
@@ -76,7 +74,6 @@ class CandidateRegistrationSerializer(serializers.ModelSerializer):
             defaults={'name': 'City', 'display_order': 5}
         )
 
-        # Create/get role - Check if already FilterOption
         role_name = data.get('role')
         if role_name:
             if isinstance(role_name, FilterOption):
@@ -89,7 +86,6 @@ class CandidateRegistrationSerializer(serializers.ModelSerializer):
                 )
                 data['role'] = role
 
-        # Create/get religion - Check if already FilterOption
         religion_name = data.get('religion')
         if religion_name:
             if isinstance(religion_name, FilterOption):
@@ -102,7 +98,6 @@ class CandidateRegistrationSerializer(serializers.ModelSerializer):
                 )
                 data['religion'] = religion
 
-        # Default country to India - Check if already FilterOption
         country_name = data.get('country', 'India')
         if isinstance(country_name, FilterOption):
             country = country_name
@@ -114,7 +109,6 @@ class CandidateRegistrationSerializer(serializers.ModelSerializer):
             )
         data['country'] = country
 
-        # Create/get state - Check if already FilterOption
         state_name = data.get('state')
         if state_name:
             if isinstance(state_name, FilterOption):
@@ -129,7 +123,6 @@ class CandidateRegistrationSerializer(serializers.ModelSerializer):
         else:
             state = None
 
-        # Create/get city - Check if already FilterOption
         city_name = data.get('city')
         if city_name and state:
             if isinstance(city_name, FilterOption):

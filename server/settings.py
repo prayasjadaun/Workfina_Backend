@@ -52,6 +52,7 @@ INSTALLED_APPS = [
     'apps.wallet',
     'django_filters',
     'apps.api_logs',
+    'apps.banners',
     
     'rest_framework_simplejwt.token_blacklist',
     

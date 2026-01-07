@@ -71,7 +71,6 @@ class Candidate(models.Model):
     phone = models.CharField(max_length=20)
     age = models.PositiveIntegerField()
     
-    # Professional Information - Using FilterOption
     role = models.ForeignKey(FilterOption, on_delete=models.SET_NULL, null=True, blank=True, related_name='role_candidates')
     experience_years = models.PositiveIntegerField()
     current_ctc = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
