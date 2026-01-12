@@ -1,5 +1,5 @@
 from django.urls import path
-from .views import SendOTPView, VerifyOTPView, LoginView, CreateAccountView, LogoutView, UpdateRoleView, RefreshTokenView
+from .views import SendOTPView, VerifyOTPView, LoginView, CreateAccountView, LogoutView, UpdateRoleView, RefreshTokenView, UpdateFCMTokenView
 
 urlpatterns = [
     path('send-otp/', SendOTPView.as_view()),
@@ -9,4 +9,5 @@ urlpatterns = [
     path('logout/', LogoutView.as_view()),
     path('update-role/', UpdateRoleView.as_view()),
     path('refresh/', RefreshTokenView.as_view()),
+    path('update-fcm-token/', UpdateFCMTokenView.as_view()),
 ]

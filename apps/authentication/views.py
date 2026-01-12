@@ -175,3 +175,21 @@ class LogoutView(APIView):
                 {'message': 'Logged out successfully'},
                 status=status.HTTP_200_OK
             )
+# ================= UPDATE FCM TOKEN =================
+class UpdateFCMTokenView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        try:
+            token = request.data.get('token')
+            if token:
+                user = request.user
+                user.fcm_token = token
+                user.save()
+                return Response({'success': True}, status=status.HTTP_200_OK)
+            return Response({'error': 'Token required'}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)           
+            
+            
+            

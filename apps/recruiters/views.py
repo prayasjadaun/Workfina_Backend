@@ -64,6 +64,22 @@ def update_hr_profile(request):
 
 from django.core.paginator import Paginator
 
+
+def normalize_slug(value: str) -> str:
+    """
+    Converts slug to human readable text
+    madhya-pradesh -> Madhya Pradesh
+    uttar_pradesh  -> Uttar Pradesh
+    """
+    return (
+        value
+        .replace('-', ' ')
+        .replace('_', ' ')
+        .strip()
+        .title()
+    )
+
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def filter_candidates(request):
@@ -138,18 +154,22 @@ def filter_candidates(request):
             pass
             
     if city:
-        queryset = queryset.filter(city__name__icontains=city)
-        
+        normalized_city = normalize_slug(city)
+        queryset = queryset.filter(city__name__iexact=normalized_city)
+
     if state:
-        queryset = queryset.filter(state__name__icontains=state)
-        
+        normalized_state = normalize_slug(state)
+        queryset = queryset.filter(state__name__iexact=normalized_state)
+
     if country:
-        queryset = queryset.filter(country__name__icontains=country)
-        
+        normalized_country = normalize_slug(country)
+        queryset = queryset.filter(country__name__iexact=normalized_country)
+
+            
     if religion and religion != 'All':
-        queryset = queryset.filter(religion__name__iexact=religion)
-        
-    # REMOVED: education filter since it doesn't exist on Candidate model
+        queryset = queryset.filter(
+        religion__name__iexact=normalize_slug(religion)
+    )
         
     if skills:
         queryset = queryset.filter(skills__icontains=skills)
@@ -209,3 +229,7 @@ def filter_candidates(request):
             'ctc_range': f"{min_ctc}-{max_ctc}"
         }
     })
+    
+    
+
+

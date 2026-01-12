@@ -14,6 +14,7 @@ class User(AbstractUser):
     role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='')
     is_email_verified = models.BooleanField(default=False)
     google_id = models.CharField(max_length=100, blank=True, null=True)
+    fcm_token = models.TextField(blank=True, null=True)
     
     USERNAME_FIELD = 'email'
     REQUIRED_FIELDS = ['username']

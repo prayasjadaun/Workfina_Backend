@@ -671,21 +671,128 @@ def get_filter_options(request):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def get_filter_categories(request):
-    """Get all filter categories"""
+    """Get all filter categories with subcategories and candidate counts"""
     
     if request.user.role != 'hr':
         return Response({
             'error': 'Only HR users can access this'
         }, status=status.HTTP_403_FORBIDDEN)
     
-    from .models import FilterCategory
+    from .models import FilterCategory, FilterOption
     
     categories = FilterCategory.objects.filter(is_active=True).order_by('display_order', 'name')
-    serializer = FilterCategorySerializer(categories, many=True, context={'request': request})
+    
+    field_mapping = {
+        'department': 'role',
+        'religion': 'religion', 
+        'country': 'country',
+        'state': 'state',
+        'city': 'city'
+    }
+    
+    unlocked_ids = set(UnlockHistory.objects.filter(
+        hr_user=request.user.hr_profile
+    ).values_list('candidate_id', flat=True))
+    
+    results = []
+    
+    for category in categories:
+        icon_url = None
+        if category.icon:
+            icon_url = request.build_absolute_uri(category.icon.url)
+        
+        field_name = field_mapping.get(category.slug)
+        
+        if category.slug in ['state', 'city']:
+            options = FilterOption.objects.filter(
+                category=category, 
+                is_active=True
+            ).order_by('display_order', 'name')
+        else:
+            options = FilterOption.objects.filter(
+                category=category, 
+                is_active=True, 
+                parent__isnull=True
+            ).order_by('display_order', 'name')
+        
+        subcategories = []
+        
+        for option in options:
+            if field_name:
+                total_count = Candidate.objects.filter(
+                    is_active=True,
+                    **{f"{field_name}": option}
+                ).count()
+                
+                unlocked_count = Candidate.objects.filter(
+                    is_active=True,
+                    id__in=unlocked_ids,
+                    **{f"{field_name}": option}
+                ).count()
+                
+                locked_count = total_count - unlocked_count
+            else:
+                total_count = unlocked_count = locked_count = 0
+            
+            children = FilterOption.objects.filter(
+                parent=option, 
+                is_active=True
+            ).order_by('display_order', 'name')
+            
+            child_subcategories = []
+            
+            for child in children:
+                if field_name:
+                    child_total = Candidate.objects.filter(
+                        is_active=True,
+                        **{f"{field_name}": child}
+                    ).count()
+                    
+                    child_unlocked = Candidate.objects.filter(
+                        is_active=True,
+                        id__in=unlocked_ids,
+                        **{f"{field_name}": child}
+                    ).count()
+                    
+                    child_locked = child_total - child_unlocked
+                else:
+                    child_total = child_unlocked = child_locked = 0
+                
+                child_subcategories.append({
+                    'id': str(child.id),
+                    'name': child.name,
+                    'slug': child.slug,
+                    'total_candidates': child_total,
+                    'locked_candidates': child_locked,
+                    'unlocked_candidates': child_unlocked
+                })
+            
+            subcategories.append({
+                'id': str(option.id),
+                'name': option.name,
+                'slug': option.slug,
+                'total_candidates': total_count,
+                'locked_candidates': locked_count,
+                'unlocked_candidates': unlocked_count,
+                'children': child_subcategories
+            })
+        
+        results.append({
+            'id': str(category.id),
+            'name': category.name,
+            'slug': category.slug,
+            'icon': icon_url,
+            'display_order': category.display_order,
+            'is_active': category.is_active,
+            'bento_grid': category.bento_grid,
+            'dashboard_display': category.dashboard_display,
+            'inner_filter': category.inner_filter,
+            'subcategories': subcategories
+        })
     
     return Response({
         'success': True,
-        'filter_categories': serializer.data
+        'filter_categories': results
     })
 
 # ========== Notes & Followups APIs ==========
