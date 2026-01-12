@@ -64,9 +64,9 @@ class CandidateAdminForm(forms.ModelForm):
 @admin.register(Candidate)
 class CandidateAdmin(admin.ModelAdmin):
     form = CandidateAdminForm 
-    list_display = ['user', 'masked_name', 'role', 'experience_years', 'city', 'age', 'is_active']
-    list_filter = ['role__category', 'religion', 'state', 'is_active', 'experience_years']
-    search_fields = ['full_name', 'masked_name', 'user__email', 'skills']
+    list_display = ['user', 'masked_name','first_name', 'last_name', 'role', 'experience_years', 'city', 'age', 'is_active']
+    list_filter = ['role__category', 'religion', 'state', 'is_active', 'experience_years','joining_availability']
+    search_fields = ['first_name', 'last_name', 'masked_name', 'user__email', 'skills','notice_period_details']
     readonly_fields = ['masked_name', 'created_at', 'updated_at']
     raw_id_fields = ['user']
     inlines = [WorkExperienceInline, EducationInline]
@@ -76,10 +76,13 @@ class CandidateAdmin(admin.ModelAdmin):
             'fields': ('user',)
         }),
         ('Basic Information', {
-            'fields': ('full_name', 'masked_name', 'phone', 'age')
+            'fields': ('first_name', 'last_name', 'masked_name', 'phone', 'age')
         }),
         ('Professional', {
             'fields': ('role', 'experience_years', 'current_ctc', 'expected_ctc', 'skills')
+        }),
+        ('Availability', { 
+            'fields': ('joining_availability', 'notice_period_details')
         }),
         ('Personal', {
             'fields': ('religion', 'languages', 'street_address', 'willing_to_relocate', 'career_objective')
