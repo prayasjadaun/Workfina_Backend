@@ -5,6 +5,7 @@ from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
+from datetime import datetime
 
 from apps.recruiters.models import HRProfile
 from django.contrib.auth import get_user_model
@@ -25,9 +26,8 @@ class CandidateRegistrationView(generics.CreateAPIView):
     
     serializer_class = CandidateRegistrationSerializer
     permission_classes = [IsAuthenticated]
-    parser_classes=[MultiPartParser, FormParser, JSONParser]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
 
-    
     def post(self, request, *args, **kwargs):
         print("=" * 50)
         print("DEBUG - Registration Request")
@@ -50,7 +50,87 @@ class CandidateRegistrationView(generics.CreateAPIView):
                 'error': 'Candidate profile already exists'
             }, status=status.HTTP_400_BAD_REQUEST)
         
-        return super().post(request, *args, **kwargs)
+        # ✅ GET WORK EXPERIENCE & EDUCATION DATA
+        work_experience_data = request.data.get('work_experience')
+        education_data = request.data.get('education')
+        
+        # Call parent create method first
+        response = super().post(request, *args, **kwargs)
+        
+        if response.status_code == 201:
+            try:
+                candidate = Candidate.objects.get(user=request.user)
+                
+                if work_experience_data:
+                    try:
+                        import json
+                        work_exp_list = json.loads(work_experience_data)
+                        
+                        print("=" * 50)
+                        print("SAVING WORK EXPERIENCES:")
+                        print(json.dumps(work_exp_list, indent=2))
+                        print("=" * 50)
+                        
+                        for exp_data in work_exp_list:
+                            WorkExperience.objects.create(
+                                candidate=candidate,
+                                company_name=exp_data.get('company_name', ''),
+                                role_title=exp_data.get('role_title', ''),
+                                start_date=f"{exp_data.get('start_year')}-{_month_to_number(exp_data.get('start_month'))}-01",
+                                end_date=f"{exp_data.get('end_year')}-{_month_to_number(exp_data.get('end_month'))}-01" if not exp_data.get('is_current') and exp_data.get('end_year') else None,
+                                is_current=exp_data.get('is_current', False),
+                                location=exp_data.get('location', ''),
+                                description=exp_data.get('description', ''),
+                            )
+                            print(f"✅ Saved work experience: {exp_data.get('company_name')}")
+                    except Exception as e:
+                        print(f"❌ Work experience error: {e}")
+                        import traceback
+                        traceback.print_exc()
+                
+                # ✅ SAVE EDUCATION
+                if education_data:
+                    try:
+                        import json
+                        edu_list = json.loads(education_data)
+                        
+                        print("=" * 50)
+                        print("SAVING EDUCATION:")
+                        print(json.dumps(edu_list, indent=2))
+                        print("=" * 50)
+                        
+                        for edu_data in edu_list:
+                            Education.objects.create(
+                                candidate=candidate,
+                                institution_name=edu_data.get('school', ''),
+                                degree=edu_data.get('degree', ''),
+                                field_of_study=edu_data.get('field', ''),
+                                start_year=int(edu_data.get('start_year', 2020)),
+                                end_year=int(edu_data.get('end_year', 2024)),
+                                is_ongoing=False,
+                                grade_percentage=float(edu_data.get('grade', '0').replace('%', '')) if edu_data.get('grade') else None,
+                                location=''
+                            )
+                            print(f"✅ Saved education: {edu_data.get('school')}")
+                    except Exception as e:
+                        print(f"❌ Education error: {e}")
+                        import traceback
+                        traceback.print_exc()
+                
+                # Return full profile data with work_experiences and educations
+                candidate.refresh_from_db()
+
+                candidate = Candidate.objects.prefetch_related('educations', 'work_experiences').get(id=candidate.id)
+
+                serializer = FullCandidateSerializer(candidate, context={'request': request})
+                return Response(serializer.data, status=status.HTTP_201_CREATED)
+                
+            except Exception as e:
+                print(f"❌ Error saving work/education: {e}")
+                import traceback
+                traceback.print_exc()
+        
+        return response
 
 class CandidateListView(generics.ListAPIView):
     """API to list masked candidates with filters - For HR users"""
@@ -256,34 +336,49 @@ def update_candidate_profile(request):
     try:
         candidate = Candidate.objects.get(user=request.user)
         
-       # Handle work experience if provided
+        # Handle work experience if provided
         work_experience_data = request.data.get('work_experiences')
         if work_experience_data:
             candidate.work_experiences.all().delete()
             
             try:
                 import json
-                import re
                 
-                # Clean the string to make it valid JSON
-                clean_data = re.sub(r'(\w+):', r'"\1":', work_experience_data)
-                clean_data = re.sub(r': ([^",\[\]{}]+)([,}])', r': "\1"\2', clean_data)
-                clean_data = clean_data.replace(': "true"', ': true').replace(': "false"', ': false').replace(': "null"', ': null')
+                # ✅ DIRECTLY PARSE JSON - NO REGEX CLEANING
+                work_exp_list = json.loads(work_experience_data)
                 
-                work_exp_list = json.loads(clean_data)
-                for exp_data in work_exp_list:
-                    WorkExperience.objects.create(
+                print("=" * 80)
+                print("WORK EXPERIENCES RECEIVED:")
+                print(json.dumps(work_exp_list, indent=2))
+                print("=" * 80)
+                
+                for i, exp_data in enumerate(work_exp_list, 1):
+                    print(f"\n--- Creating Experience #{i} ---")
+                    print(f"Company: {exp_data.get('company_name')}")
+                    print(f"Role: {exp_data.get('job_role')}")
+                    print(f"Location: '{exp_data.get('location')}'")
+                    print(f"Description: '{exp_data.get('description')}'")
+                    
+                    work_exp = WorkExperience.objects.create(
                         candidate=candidate,
                         company_name=exp_data.get('company_name', ''),
                         role_title=exp_data.get('job_role', ''),
                         start_date=f"{exp_data.get('start_year')}-{_month_to_number(exp_data.get('start_month'))}-01",
-                        end_date=f"{exp_data.get('end_year')}-{_month_to_number(exp_data.get('end_month'))}-01" if not exp_data.get('is_current') and exp_data.get('end_year') not in [None, 'null'] else None,
+                        end_date=f"{exp_data.get('end_year')}-{_month_to_number(exp_data.get('end_month'))}-01" if not exp_data.get('is_current') and exp_data.get('end_year') else None,
                         is_current=exp_data.get('is_current', False),
-                        location='',
-                        description=''
+                        location=exp_data.get('location', ''),
+                        description=exp_data.get('description', ''),
                     )
+                    
+                    print(f"✅ Saved - Location: '{work_exp.location}', Description: '{work_exp.description}'")
+                    
+            except json.JSONDecodeError as e:
+                print(f"❌ JSON parsing error: {e}")
+                print(f"Raw data: {work_experience_data}")
             except Exception as e:
-                print(f"Work experience parsing error: {e}")
+                print(f"❌ Work experience error: {e}")
+                import traceback
+                traceback.print_exc()
 
         # Handle education if provided  
         education_data = request.data.get('educations')
@@ -292,12 +387,10 @@ def update_candidate_profile(request):
             
             try:
                 import json
-                import re
                 
-                clean_data = re.sub(r'(\w+):', r'"\1":', education_data)
-                clean_data = re.sub(r': ([^",\[\]{}]+)([,}])', r': "\1"\2', clean_data)
+                # ✅ DIRECTLY PARSE JSON - NO REGEX CLEANING
+                edu_list = json.loads(education_data)
                 
-                edu_list = json.loads(clean_data)
                 for edu_data in edu_list:
                     Education.objects.create(
                         candidate=candidate,
@@ -308,15 +401,15 @@ def update_candidate_profile(request):
                         end_year=int(edu_data.get('end_year', 2024)),
                         is_ongoing=False,
                         grade_percentage=float(edu_data.get('grade', '0').replace('%', '')) if edu_data.get('grade') else None,
-                        location=''
+                        location=edu_data.get('location', '')
                     )
             except Exception as e:
                 print(f"Education parsing error: {e}")
         
-        # Remove work_experience and education from request.data for candidate update
+        # Remove work_experiences and educations from request.data for candidate update
         candidate_data = request.data.copy()
-        candidate_data.pop('work_experience', None)
-        candidate_data.pop('education', None)
+        candidate_data.pop('work_experiences', None)
+        candidate_data.pop('educations', None)
         
         # Use the same serializer with the same validation logic
         serializer = CandidateRegistrationSerializer(
@@ -346,6 +439,7 @@ def update_candidate_profile(request):
             'error': 'Profile not found'
         }, status=status.HTTP_404_NOT_FOUND)
 
+
 def _month_to_number(month_name):
     """Convert month name to number"""
     months = {
@@ -353,7 +447,7 @@ def _month_to_number(month_name):
         'May': '05', 'June': '06', 'July': '07', 'August': '08',
         'September': '09', 'October': '10', 'November': '11', 'December': '12'
     }
-    return months.get(month_name, '01')    
+    return months.get(month_name, '01')
     
     
 @api_view(['GET'])
@@ -717,3 +811,324 @@ def get_candidate_notes_followups(request, candidate_id):
         return Response({
             'error': 'Candidate not found'
         }, status=status.HTTP_404_NOT_FOUND)
+    
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_states(request):
+    try:
+        state_category = FilterCategory.objects.get(slug='state')
+        country_category = FilterCategory.objects.get(slug='country')
+        india = FilterOption.objects.get(category=country_category, slug='india')
+        
+        states = FilterOption.objects.filter(
+            category=state_category,
+            parent=india,
+            is_active=True
+        ).order_by('name')
+        
+        states_data = [
+            {
+                'id': str(state.id),
+                'name': state.name,
+                'slug': state.slug
+            }
+            for state in states
+        ]
+        
+        return Response({'success': True, 'states': states_data})
+        
+    except FilterCategory.DoesNotExist:
+        return Response({'error': 'Location data not initialized'}, status=404)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_cities(request):
+    state_slug = request.query_params.get('state')
+    
+    if not state_slug:
+        return Response({'error': 'State parameter is required'}, status=400)
+    
+    try:
+        city_category = FilterCategory.objects.get(slug='city')
+        state_category = FilterCategory.objects.get(slug='state')
+        
+        state = FilterOption.objects.get(
+            category=state_category,
+            slug=state_slug,
+            is_active=True
+        )
+        
+        cities = FilterOption.objects.filter(
+            category=city_category,
+            parent=state,
+            is_active=True
+        ).order_by('name')
+        
+        cities_data = [
+            {
+                'id': str(city.id),
+                'name': city.name,
+                'slug': city.slug
+            }
+            for city in cities
+        ]
+        
+        return Response({'success': True, 'state': state.name, 'cities': cities_data})
+        
+    except FilterOption.DoesNotExist:
+        return Response({'error': 'State not found'}, status=404)
+    except FilterCategory.DoesNotExist:
+        return Response({'error': 'Location data not initialized'}, status=404)
+    
+@api_view(['POST', 'PATCH'])
+@permission_classes([IsAuthenticated])
+@parser_classes([MultiPartParser, FormParser, JSONParser])
+def save_candidate_step(request):
+    """Save candidate profile step-by-step (auto-save)"""
+    
+    if request.user.role != 'candidate':
+        return Response({'error': 'Only candidates can save profile steps'}, status=403)
+    
+    step = request.data.get('step')
+    if not step or int(step) not in [1, 2, 3, 4]:
+        return Response({'error': 'Invalid step. Must be 1, 2, 3, or 4'}, status=400)
+    
+    step = int(step)
+    
+    try:
+        candidate, created = Candidate.objects.get_or_create(
+            user=request.user,
+            defaults={
+                'first_name': '',
+                'last_name': '',
+                'phone': '',
+                'age': 0,
+                'experience_years': 0,
+                'skills': '',
+                'profile_step': step
+            }
+        )
+        
+        update_data = {'profile_step': step}
+        
+        # Step 1: Personal Information
+        if step == 1:
+            if request.data.get('first_name'):
+                update_data['first_name'] = request.data.get('first_name')
+            if request.data.get('last_name'):
+                update_data['last_name'] = request.data.get('last_name')
+            if request.data.get('phone'):
+                update_data['phone'] = request.data.get('phone')
+            if request.data.get('age'):
+                update_data['age'] = int(request.data.get('age'))
+            if request.data.get('current_ctc'):
+                update_data['current_ctc'] = float(request.data.get('current_ctc'))
+            if request.data.get('expected_ctc'):
+                update_data['expected_ctc'] = float(request.data.get('expected_ctc'))
+            if request.data.get('languages'):
+                update_data['languages'] = request.data.get('languages')
+            if request.data.get('street_address'):
+                update_data['street_address'] = request.data.get('street_address')
+            if request.data.get('willing_to_relocate') is not None:
+                update_data['willing_to_relocate'] = request.data.get('willing_to_relocate') == 'true' or request.data.get('willing_to_relocate') == True
+            if request.data.get('career_objective'):
+                update_data['career_objective'] = request.data.get('career_objective')
+            if request.data.get('joining_availability'):
+                update_data['joining_availability'] = request.data.get('joining_availability')
+            if request.data.get('notice_period_details'):
+                update_data['notice_period_details'] = request.data.get('notice_period_details')    
+            
+            # Handle role
+            role_value = request.data.get('role')
+            if role_value:
+                dept_category, _ = FilterCategory.objects.get_or_create(
+                    slug='department',
+                    defaults={'name': 'Department', 'display_order': 1}
+                )
+                role_slug = role_value.lower().replace(' ', '-')
+                role, _ = FilterOption.objects.get_or_create(
+                    category=dept_category,
+                    slug=role_slug,
+                    defaults={'name': role_value, 'is_active': True}
+                )
+                update_data['role'] = role
+            
+            # Handle religion
+            religion_value = request.data.get('religion')
+            if religion_value:
+                religion_category, _ = FilterCategory.objects.get_or_create(
+                    slug='religion',
+                    defaults={'name': 'Religion', 'display_order': 2}
+                )
+                religion_slug = religion_value.lower().replace(' ', '-')
+                religion, _ = FilterOption.objects.get_or_create(
+                    category=religion_category,
+                    slug=religion_slug,
+                    defaults={'name': religion_value, 'is_active': True}
+                )
+                update_data['religion'] = religion
+            
+            # Handle location
+            state_value = request.data.get('state')
+            city_value = request.data.get('city')
+            
+            if state_value or city_value:
+                country_category, _ = FilterCategory.objects.get_or_create(
+                    slug='country',
+                    defaults={'name': 'Country', 'display_order': 3}
+                )
+                state_category, _ = FilterCategory.objects.get_or_create(
+                    slug='state',
+                    defaults={'name': 'State', 'display_order': 4}
+                )
+                city_category, _ = FilterCategory.objects.get_or_create(
+                    slug='city',
+                    defaults={'name': 'City', 'display_order': 5}
+                )
+                
+                country, _ = FilterOption.objects.get_or_create(
+                    category=country_category,
+                    slug='india',
+                    defaults={'name': 'India', 'is_active': True}
+                )
+                update_data['country'] = country
+                
+                if state_value:
+                    state_slug = state_value.lower().replace(' ', '-')
+                    state, _ = FilterOption.objects.get_or_create(
+                        category=state_category,
+                        slug=state_slug,
+                        defaults={'name': state_value.title(), 'parent': country, 'is_active': True}
+                    )
+                    update_data['state'] = state
+                    
+                    if city_value:
+                        city_slug = f"{state_slug}-{city_value.lower().replace(' ', '-')}"
+                        city, _ = FilterOption.objects.get_or_create(
+                            category=city_category,
+                            slug=city_slug,
+                            defaults={'name': city_value.title(), 'parent': state, 'is_active': True}
+                        )
+                        update_data['city'] = city
+            
+            if 'profile_image' in request.FILES:
+                update_data['profile_image'] = request.FILES['profile_image']
+        
+        # Step 2: Work Experience
+        elif step == 2:
+            work_experience_data = request.data.get('work_experience')
+            if work_experience_data:
+                candidate.work_experiences.all().delete()
+                
+                import json
+                work_exp_list = json.loads(work_experience_data)
+                
+                for exp_data in work_exp_list:
+                    WorkExperience.objects.create(
+                        candidate=candidate,
+                        company_name=exp_data.get('company_name', ''),
+                        role_title=exp_data.get('role_title', ''),
+                        start_date=f"{exp_data.get('start_year')}-{_month_to_number(exp_data.get('start_month'))}-01",
+                        end_date=f"{exp_data.get('end_year')}-{_month_to_number(exp_data.get('end_month'))}-01" if not exp_data.get('is_current') and exp_data.get('end_year') else None,
+                        is_current=exp_data.get('is_current', False),
+                        location=exp_data.get('location', ''),
+                        description=exp_data.get('description', ''),
+                    )
+            
+            # Calculate experience
+            total_exp = 0
+            from datetime import datetime
+            for exp in candidate.work_experiences.all():
+                start_year = exp.start_date.year
+                end_year = exp.end_date.year if exp.end_date else datetime.now().year
+                total_exp += (end_year - start_year)
+            
+            if total_exp > 0:
+                update_data['experience_years'] = total_exp
+        
+        # Step 3: Education + Skills
+        elif step == 3:
+            if request.data.get('skills'):
+                update_data['skills'] = request.data.get('skills')
+            
+            education_data = request.data.get('education')
+            if education_data:
+                candidate.educations.all().delete()
+                
+                import json
+                edu_list = json.loads(education_data)
+                
+                for edu_data in edu_list:
+                    Education.objects.create(
+                        candidate=candidate,
+                        institution_name=edu_data.get('school', ''),
+                        degree=edu_data.get('degree', ''),
+                        field_of_study=edu_data.get('field', ''),
+                        start_year=int(edu_data.get('start_year', 2020)),
+                        end_year=int(edu_data.get('end_year', 2024)),
+                        is_ongoing=False,
+                        grade_percentage=float(edu_data.get('grade', '0').replace('%', '')) if edu_data.get('grade') else None,
+                        location=edu_data.get('location', '')
+                    )
+        
+        # Step 4: Documents
+        elif step == 4:
+            if 'resume' in request.FILES:
+                update_data['resume'] = request.FILES['resume']
+            if 'video_intro' in request.FILES:
+                update_data['video_intro'] = request.FILES['video_intro']
+            update_data['is_profile_completed'] = True
+        
+        # Update candidate
+        for field, value in update_data.items():
+            setattr(candidate, field, value)
+        candidate.save()
+        
+        serializer = FullCandidateSerializer(candidate, context={'request': request})
+        
+        return Response({
+            'success': True,
+            'message': f'Step {step} saved successfully',
+            'current_step': candidate.profile_step,
+            'is_completed': candidate.is_profile_completed,
+            'profile': serializer.data
+        })
+        
+    except Exception as e:
+        return Response({'error': f'Failed to save step: {str(e)}'}, status=500)
+    
+
+@api_view(['GET'])
+def get_public_filter_options(request):
+    """Get department and religion options - publicly accessible"""
+    
+    from .models import FilterCategory, FilterOption
+    
+    try:
+        dept_category = FilterCategory.objects.get(slug='department', is_active=True)
+        religion_category = FilterCategory.objects.get(slug='religion', is_active=True)
+        
+        departments = FilterOption.objects.filter(
+            category=dept_category, 
+            is_active=True
+        ).order_by('display_order', 'name')
+        
+        religions = FilterOption.objects.filter(
+            category=religion_category,
+            is_active=True
+        ).order_by('display_order', 'name')
+        
+        return Response({
+            'success': True,
+            'departments': [{'value': dept.slug, 'label': dept.name} for dept in departments],
+            'religions': [{'value': relig.slug, 'label': relig.name} for relig in religions]
+        })
+        
+    except FilterCategory.DoesNotExist:
+        return Response({
+            'success': True,
+            'departments': [],
+            'religions': []
+        })

@@ -1,5 +1,7 @@
 from django.urls import path
 from .views import *
+from .views import save_candidate_step
+
 
 urlpatterns = [
     path('register/', CandidateRegistrationView.as_view(), name='candidate-register'),
@@ -13,5 +15,11 @@ urlpatterns = [
     path('<uuid:candidate_id>/note/', add_candidate_note, name='add-candidate-note'),
     path('<uuid:candidate_id>/followup/', add_candidate_followup, name='add-candidate-followup'),
     path('<uuid:candidate_id>/notes-followups/', get_candidate_notes_followups, name='get-candidate-notes-followups'),
+    path('locations/states/', get_states, name='get-states'),
+    path('locations/cities/', get_cities, name='get-cities'),
+    path('save-step/', save_candidate_step, name='save-candidate-step'),
+    path('public/filter-options/', get_public_filter_options, name='public-filter-options'),
+
+
     
 ]

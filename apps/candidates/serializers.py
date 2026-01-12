@@ -36,21 +36,51 @@ class CandidateRegistrationSerializer(serializers.ModelSerializer):
     class Meta:
         model = Candidate
         fields = [
-            'full_name', 'phone', 'age', 'role', 'experience_years',
+           'first_name','last_name', 'phone', 'age', 'role', 'experience_years',
             'current_ctc', 'expected_ctc', 'religion', 'country',
             'state', 'city', 'skills', 'resume', 'video_intro', 'profile_image',
-            'languages', 'street_address', 'willing_to_relocate', 'career_objective'
+            'languages', 'street_address', 'willing_to_relocate', 'career_objective','joining_availability', 'notice_period_details'
         ]
         extra_kwargs = {
-            'resume': {'required': False, 'allow_null': True},
-            'video_intro': {'required': False, 'allow_null': True},
-            'profile_image': {'required': False, 'allow_null': True},
-            'languages': {'required': False, 'allow_blank': True},
-            'street_address': {'required': False, 'allow_blank': True},
-            'willing_to_relocate': {'required': False},
-            'work_experience': {'required': False, 'allow_blank': True},
-            'career_objective': {'required': False, 'allow_blank': True},
-        }
+        'first_name': {'required': True},
+        'last_name': {'required': True},
+        'phone': {'required': True},
+        'age': {'required': True},
+        'role': {'required': True},
+        'state': {'required': True},
+        'city': {'required': True},
+        'religion': {'required': True},
+        'languages': {'required': True},
+        'street_address': {'required': True},
+        'career_objective': {'required': True},
+        'current_ctc': {'required': False},
+        'expected_ctc': {'required': False},
+        'joining_availability': {'required': True},
+        'notice_period_details': {'required': False},  
+        'resume': {'required': False},
+        'video_intro': {'required': False},
+        'profile_image': {'required': False},
+        'experience_years': {'required': False},
+        'country': {'required': False},
+        'skills': {'required': False},
+        'willing_to_relocate':serializers.CharField(required=False)
+    }
+        
+        def validate_willing_to_relocate(self, value):
+        # """Convert YES/NO to boolean"""
+            if isinstance(value, bool):
+               return value
+            if isinstance(value, str):
+              return value.upper() == 'YES'
+            return False
+
+        def validate(self, data):
+        # Validate notice period
+         if data.get('joining_availability') == 'NOTICE_PERIOD':
+            if not data.get('notice_period_details'):
+                raise serializers.ValidationError({
+                    'notice_period_details': 'Required when joining availability is notice period'
+                })
 
     def validate(self, data):
         dept_category, _ = FilterCategory.objects.get_or_create(
@@ -75,65 +105,77 @@ class CandidateRegistrationSerializer(serializers.ModelSerializer):
         )
 
         role_name = data.get('role')
-        if role_name:
-            if isinstance(role_name, FilterOption):
-                data['role'] = role_name
-            else:
-                role, _ = FilterOption.objects.get_or_create(
+        if role_name and not isinstance(role_name, FilterOption):
+            role_slug = role_name.lower().replace(' ', '-')
+            try:
+                data['role'] = FilterOption.objects.get(category=dept_category, slug=role_slug)
+            except FilterOption.DoesNotExist:
+                data['role'] = FilterOption.objects.create(
                     category=dept_category,
+                    slug=role_slug,
                     name=role_name,
-                    defaults={'slug': role_name.lower().replace(' ', '-'), 'is_active': True}
+                    is_active=True
                 )
-                data['role'] = role
 
         religion_name = data.get('religion')
-        if religion_name:
-            if isinstance(religion_name, FilterOption):
-                data['religion'] = religion_name
-            else:
-                religion, _ = FilterOption.objects.get_or_create(
+        if religion_name and not isinstance(religion_name, FilterOption):
+            religion_slug = religion_name.lower().replace(' ', '-')
+            try:
+                data['religion'] = FilterOption.objects.get(category=religion_category, slug=religion_slug)
+            except FilterOption.DoesNotExist:
+                data['religion'] = FilterOption.objects.create(
                     category=religion_category,
+                    slug=religion_slug,
                     name=religion_name,
-                    defaults={'slug': religion_name.lower(), 'is_active': True}
+                    is_active=True
                 )
-                data['religion'] = religion
 
         country_name = data.get('country', 'India')
-        if isinstance(country_name, FilterOption):
-            country = country_name
-        else:
-            country, _ = FilterOption.objects.get_or_create(
-                category=country_category,
-                name=country_name,
-                defaults={'slug': country_name.lower(), 'is_active': True}
-            )
-        data['country'] = country
+        if not isinstance(country_name, FilterOption):
+            country_slug = country_name.lower().replace(' ', '-')
+            try:
+                country = FilterOption.objects.get(category=country_category, slug=country_slug)
+            except FilterOption.DoesNotExist:
+                country = FilterOption.objects.create(
+                    category=country_category,
+                    slug=country_slug,
+                    name=country_name,
+                    is_active=True
+                )
+            data['country'] = country
 
         state_name = data.get('state')
-        if state_name:
-            if isinstance(state_name, FilterOption):
-                state = state_name
-            else:
-                state, _ = FilterOption.objects.get_or_create(
+        state = None
+        if state_name and not isinstance(state_name, FilterOption):
+            state_slug = state_name.lower().replace(' ', '-')
+            try:
+                state = FilterOption.objects.get(category=state_category, slug=state_slug)
+            except FilterOption.DoesNotExist:
+                state = FilterOption.objects.create(
                     category=state_category,
-                    slug=state_name.lower().replace(' ', '-'),
-                    defaults={'name': state_name.title(), 'parent': country, 'is_active': True}
+                    slug=state_slug,
+                    name=state_name.title(),
+                    parent=data.get('country'),
+                    is_active=True
                 )
             data['state'] = state
-        else:
-            state = None
+        elif isinstance(state_name, FilterOption):
+            state = state_name
+            data['state'] = state
 
         city_name = data.get('city')
-        if city_name and state:
-            if isinstance(city_name, FilterOption):
-                data['city'] = city_name
-            else:
-                city, _ = FilterOption.objects.get_or_create(
+        if city_name and state and not isinstance(city_name, FilterOption):
+            city_slug = f"{state.slug}-{city_name.lower().replace(' ', '-')}"
+            try:
+                data['city'] = FilterOption.objects.get(category=city_category, slug=city_slug)
+            except FilterOption.DoesNotExist:
+                data['city'] = FilterOption.objects.create(
                     category=city_category,
-                    slug=city_name.lower().replace(' ', '-'),
-                    defaults={'name': city_name.title(), 'parent': state, 'is_active': True}
+                    slug=city_slug,
+                    name=city_name.title(),
+                    parent=state,
+                    is_active=True
                 )
-                data['city'] = city
 
         return data
 
@@ -143,7 +185,6 @@ class CandidateRegistrationSerializer(serializers.ModelSerializer):
         return super().create(validated_data)
 
     def update(self, instance, validated_data):
-        # Apply same validation for updates
         validated_data = self.validate(validated_data)
         return super().update(instance, validated_data)
 
@@ -177,27 +218,26 @@ class FullCandidateSerializer(serializers.ModelSerializer):
     video_intro_url = serializers.SerializerMethodField()
     profile_image_url = serializers.SerializerMethodField()
     
-    # Dynamic field names for FilterOptions
     role_name = serializers.CharField(source='role.name', read_only=True)
     religion_name = serializers.CharField(source='religion.name', read_only=True)
     country_name = serializers.CharField(source='country.name', read_only=True)
     state_name = serializers.CharField(source='state.name', read_only=True)
     city_name = serializers.CharField(source='city.name', read_only=True)
     
-    # Add work experience and education data
     work_experiences = WorkExperienceSerializer(many=True, read_only=True)
     educations = EducationSerializer(many=True, read_only=True)
 
     class Meta:
         model = Candidate
         fields = [
-            'id', 'full_name', 'email', 'phone', 'age',
+            'id', 'first_name', 'last_name', 'email', 'phone', 'age',
             'role_name', 'experience_years', 'current_ctc', 'expected_ctc',
             'religion_name', 'country_name', 'state_name', 'city_name',
             'skills', 'skills_list', 
             'resume_url', 'video_intro_url', 'profile_image_url', 'credits_used',
             'languages', 'street_address', 'willing_to_relocate', 'career_objective',
-            'work_experiences', 'educations'
+            'work_experiences', 'educations','profile_step', 'is_profile_completed',
+            'joining_availability', 'notice_period_details'
         ]
     
     def get_skills_list(self, obj):
@@ -277,7 +317,6 @@ class FilterOptionSerializer(serializers.ModelSerializer):
         ]
     
     def get_candidates_count(self, obj):
-        # Count candidates using this filter option in any relevant field
         from django.db.models import Q
         count = Candidate.objects.filter(
             Q(role=obj) | Q(religion=obj) | Q(country=obj) | 
@@ -288,7 +327,6 @@ class FilterOptionSerializer(serializers.ModelSerializer):
 
 
 class CandidateUpdateSerializer(serializers.ModelSerializer):
-    """Serializer for candidate profile updates"""
     role = serializers.CharField(required=False)
     religion = serializers.CharField(required=False)
     country = serializers.CharField(required=False)
@@ -298,11 +336,10 @@ class CandidateUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Candidate
         fields = [
-            'full_name', 'phone', 'age', 'role', 'experience_years',
+            'first_name', 'last_name', 'phone', 'age', 'role', 'experience_years',
             'current_ctc', 'expected_ctc', 'religion', 'country',
             'state', 'city', 'skills', 'resume', 'video_intro','profile_image',
-            'languages', 'street_address', 'willing_to_relocate', 'work_experience', 'career_objective'
-
+            'languages', 'street_address', 'willing_to_relocate', 'work_experience', 'career_objective','joining_availability', 'notice_period_details'
         ]
         extra_kwargs = {
             'resume': {'required': False, 'allow_null': True},
@@ -313,15 +350,14 @@ class CandidateUpdateSerializer(serializers.ModelSerializer):
             'willing_to_relocate': {'required': False},
             'work_experience': {'required': False, 'allow_blank': True},
             'career_objective': {'required': False, 'allow_blank': True},
+            'joining_availability': {'required': False},
+            'notice_period_details': {'required': False, 'allow_blank': True},
         }
 
     def validate(self, data):
-        # Use same conversion logic but don't call parent validate to avoid recursion
         return self._convert_to_filter_options(data)
         
     def _convert_to_filter_options(self, data):
-        """Convert string values to FilterOption instances"""
-        # Create/get categories
         dept_category, _ = FilterCategory.objects.get_or_create(
             slug='department',
             defaults={'name': 'Department', 'display_order': 1}
@@ -343,75 +379,81 @@ class CandidateUpdateSerializer(serializers.ModelSerializer):
             defaults={'name': 'City', 'display_order': 5}
         )
         
-        # Convert role - check if it's already a FilterOption
         role_value = data.get('role')
-        if role_value:
-            if isinstance(role_value, FilterOption):
-                data['role'] = role_value
-            else:
-                role, _ = FilterOption.objects.get_or_create(
+        if role_value and not isinstance(role_value, FilterOption):
+            role_slug = role_value.lower().replace(' ', '-')
+            try:
+                data['role'] = FilterOption.objects.get(category=dept_category, slug=role_slug)
+            except FilterOption.DoesNotExist:
+                data['role'] = FilterOption.objects.create(
                     category=dept_category,
+                    slug=role_slug,
                     name=role_value,
-                    defaults={'slug': role_value.lower().replace(' ', '-'), 'is_active': True}
+                    is_active=True
                 )
-                data['role'] = role
         
-        # Convert religion - check if it's already a FilterOption
         religion_value = data.get('religion')
-        if religion_value:
-            if isinstance(religion_value, FilterOption):
-                data['religion'] = religion_value
-            else:
-                religion, _ = FilterOption.objects.get_or_create(
+        if religion_value and not isinstance(religion_value, FilterOption):
+            religion_slug = religion_value.lower().replace(' ', '-')
+            try:
+                data['religion'] = FilterOption.objects.get(category=religion_category, slug=religion_slug)
+            except FilterOption.DoesNotExist:
+                data['religion'] = FilterOption.objects.create(
                     category=religion_category,
+                    slug=religion_slug,
                     name=religion_value,
-                    defaults={'slug': religion_value.lower(), 'is_active': True}
+                    is_active=True
                 )
-                data['religion'] = religion
         
-        # Default country to India
         country_value = data.get('country', 'India')
-        if isinstance(country_value, FilterOption):
-            country = country_value
-        else:
-            country, _ = FilterOption.objects.get_or_create(
-                category=country_category,
-                name=country_value,
-                defaults={'slug': country_value.lower(), 'is_active': True}
-            )
-        data['country'] = country
+        if not isinstance(country_value, FilterOption):
+            country_slug = country_value.lower().replace(' ', '-')
+            try:
+                country = FilterOption.objects.get(category=country_category, slug=country_slug)
+            except FilterOption.DoesNotExist:
+                country = FilterOption.objects.create(
+                    category=country_category,
+                    slug=country_slug,
+                    name=country_value,
+                    is_active=True
+                )
+            data['country'] = country
         
-        # Convert state - check if it's already a FilterOption
         state_value = data.get('state')
-        if state_value:
-            if isinstance(state_value, FilterOption):
-                state = state_value
-            else:
-                state, _ = FilterOption.objects.get_or_create(
+        state = None
+        if state_value and not isinstance(state_value, FilterOption):
+            state_slug = state_value.lower().replace(' ', '-')
+            try:
+                state = FilterOption.objects.get(category=state_category, slug=state_slug)
+            except FilterOption.DoesNotExist:
+                state = FilterOption.objects.create(
                     category=state_category,
-                    slug=state_value.lower().replace(' ', '-'),
-                    defaults={'name': state_value.title(), 'parent': country, 'is_active': True}
+                    slug=state_slug,
+                    name=state_value.title(),
+                    parent=data.get('country'),
+                    is_active=True
                 )
             data['state'] = state
-        else:
-            state = None
+        elif isinstance(state_value, FilterOption):
+            state = state_value
+            data['state'] = state
         
-        # Convert city
         city_value = data.get('city')
-        if city_value and state:
-            if isinstance(city_value, FilterOption):
-                data['city'] = city_value
-            else:
-                city, _ = FilterOption.objects.get_or_create(
+        if city_value and state and not isinstance(city_value, FilterOption):
+            city_slug = f"{state.slug}-{city_value.lower().replace(' ', '-')}"
+            try:
+                data['city'] = FilterOption.objects.get(category=city_category, slug=city_slug)
+            except FilterOption.DoesNotExist:
+                data['city'] = FilterOption.objects.create(
                     category=city_category,
-                    slug=city_value.lower().replace(' ', '-'),
-                    defaults={'name': city_value.title(), 'parent': state, 'is_active': True}
+                    slug=city_slug,
+                    name=city_value.title(),
+                    parent=state,
+                    is_active=True
                 )
-                data['city'] = city
         
         return data
 
     def update(self, instance, validated_data):
-        # Don't allow user change
         validated_data.pop('user', None)
         return super().update(instance, validated_data)

@@ -61,24 +61,27 @@ class FilterOption(models.Model):
         unique_together = ['category', 'slug']
     
     def __str__(self):
-        if self.parent:
-            return f"{self.parent.name} > {self.name}"
-        return f"{self.category.name}: {self.name}"
+     return self.name.title()
+
 
 class Candidate(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='candidate_profile')
+    profile_step = models.PositiveIntegerField(default=1)
+    is_profile_completed = models.BooleanField(default=False)
 
     # Basic Information
-    full_name = models.CharField(max_length=255)
+    # full_name = models.CharField(max_length=255)
+    first_name = models.CharField(max_length=100)
+    last_name = models.CharField(max_length=100)
     masked_name = models.CharField(max_length=50)
     phone = models.CharField(max_length=20)
     age = models.PositiveIntegerField()
     
     role = models.ForeignKey(FilterOption, on_delete=models.SET_NULL, null=True, blank=True, related_name='role_candidates')
     experience_years = models.PositiveIntegerField()
-    current_ctc = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
-    expected_ctc = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    current_ctc = models.DecimalField(max_digits=10, decimal_places=2,null=True, blank=True)
+    expected_ctc = models.DecimalField(max_digits=10, decimal_places=2,null=True, blank=True)
     
     # Personal Information - Using FilterOption
     religion = models.ForeignKey(FilterOption, on_delete=models.SET_NULL, null=True, blank=True, related_name='religion_candidates')
@@ -97,12 +100,21 @@ class Candidate(models.Model):
     video_intro = models.FileField(upload_to='video_intros/', blank=True, null=True)
     profile_image = models.ImageField(upload_to='profile_images/', blank=True, null=True)
 
-    languages = models.TextField(blank=True, null=True)  
-    street_address = models.CharField(max_length=500, blank=True, null=True)
+    languages = models.TextField()  
+    street_address = models.CharField(max_length=500)
     willing_to_relocate = models.BooleanField(default=False)
+    joining_availability = models.CharField(
+        max_length=20,
+        choices=[
+            ('IMMEDIATE', 'Immediate'),
+            ('NOTICE_PERIOD', 'Notice Period'),
+        ],
+        default='IMMEDIATE'
+    )
+    notice_period_details = models.CharField(max_length=255, blank=True, null=True)
     
     # Career Objective
-    career_objective = models.TextField(blank=True, null=True)
+    career_objective = models.TextField()
 
 
     # Meta Information
@@ -204,8 +216,9 @@ class Education(models.Model):
 # Signal to auto-generate masked_name
 @receiver(pre_save, sender=Candidate)
 def generate_masked_name(sender, instance, **kwargs):
-    if instance.full_name and not instance.masked_name:
-        names = instance.full_name.split()
+    if instance.first_name and instance.last_name and not instance.masked_name:
+        full_name = f"{instance.first_name} {instance.last_name}"
+        names = full_name.split()
         masked = []
         for name in names:
             if len(name) > 1:
