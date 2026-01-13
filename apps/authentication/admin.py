@@ -3,9 +3,10 @@ from .models import User, EmailOTP
 
 @admin.register(User)
 class UserAdmin(admin.ModelAdmin):
-    list_display = ['email', 'username', 'role', 'is_email_verified', 'date_joined']
-    list_filter = ['role', 'is_email_verified', 'is_active']
-    search_fields = ['email', 'username']
+    list_display = ['email', 'get_full_name', 'role', 'is_email_verified', 'is_active']
+    list_filter = ['role', 'is_email_verified', 'is_active', 'is_staff']
+    search_fields = ['email', 'first_name', 'last_name', 'employee_id']
+    readonly_fields = ['id']
 
 @admin.register(EmailOTP)
 class EmailOTPAdmin(admin.ModelAdmin):

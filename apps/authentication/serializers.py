@@ -42,18 +42,15 @@ class VerifyOTPSerializer(serializers.Serializer):
 
 class CreateAccountSerializer(serializers.Serializer):
     email = serializers.EmailField()
-    username = serializers.CharField()
+    username = serializers.CharField(max_length=150, required=False, allow_blank=True)
+    first_name = serializers.CharField(max_length=50, required=False, allow_blank=True)
+    last_name = serializers.CharField(max_length=50, required=False, allow_blank=True)
     password = serializers.CharField(min_length=6)
     confirm_password = serializers.CharField()
     
     def validate_email(self, value):
         if User.objects.filter(email=value).exists():
             raise serializers.ValidationError('User with this email already exists')
-        return value
-    
-    def validate_username(self, value):
-        if User.objects.filter(username=value).exists():
-            raise serializers.ValidationError('Username already taken')
         return value
     
     def validate(self, attrs):
@@ -74,10 +71,14 @@ class CreateAccountSerializer(serializers.Serializer):
     def create(self, validated_data):
         validated_data.pop('confirm_password')
         password = validated_data.pop('password')
-        
+
+        # Generate username from email if not provided
+        if not validated_data.get('username'):
+            validated_data['username'] = validated_data['email'].split('@')[0]
+
         user = User.objects.create_user(
             password=password,
             is_email_verified=True,
             **validated_data
-        )        
+        )
         return user

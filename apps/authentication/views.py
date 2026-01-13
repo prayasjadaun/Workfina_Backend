@@ -68,8 +68,10 @@ class CreateAccountView(APIView):
                 'refresh': str(refresh),
                 'access': str(refresh.access_token),
                 'user': {
-                    'id': user.id,
+                    'id': str(user.id),
                     'email': user.email,
+                    'first_name': user.first_name,
+                    'last_name': user.last_name,
                     'role': user.role
                 }
             }, status=status.HTTP_201_CREATED)
@@ -94,8 +96,10 @@ class LoginView(APIView):
                 'refresh': str(refresh),
                 'access': str(refresh.access_token),
                 'user': {
-                    'id': user.id,
+                    'id': str(user.id),
                     'email': user.email,
+                    'first_name': user.first_name,
+                    'last_name': user.last_name,
                     'role': user.role
                 }
             }, status=status.HTTP_200_OK)
@@ -189,7 +193,4 @@ class UpdateFCMTokenView(APIView):
                 return Response({'success': True}, status=status.HTTP_200_OK)
             return Response({'error': 'Token required'}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
-            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)           
-            
-            
-            
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

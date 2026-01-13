@@ -53,6 +53,7 @@ INSTALLED_APPS = [
     'django_filters',
     'apps.api_logs',
     'apps.banners',
+    'apps.notifications',  
     
     'rest_framework_simplejwt.token_blacklist',
     
@@ -223,3 +224,11 @@ LOGGING = {
         },
     },
 }
+
+
+
+# Firebase configuration - initialization handled in fcm_utils
+FIREBASE_SERVICE_ACCOUNT_KEY = os.path.join(BASE_DIR, 'firebase-service-account.json')
+
+# Notification API key for scheduled tasks (use environment variable in production)
+NOTIFICATION_API_KEY = os.environ.get('NOTIFICATION_API_KEY', 'workfina-secret-api-key-2024')

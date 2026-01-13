@@ -18,6 +18,10 @@ from .serializers import (
     CandidateFollowupSerializer,
     FilterCategorySerializer
 )
+from apps.notifications.services import WorkfinaFCMService
+from apps.notifications.models import ProfileStepReminder
+from apps.wallet.models import Wallet
+
 
 User = get_user_model()
 
@@ -220,8 +224,7 @@ def unlock_candidate(request, candidate_id):
                 'already_unlocked': True
             })
         
-        # Check wallet balance
-        from apps.wallet.models import Wallet
+
         try:
             wallet = Wallet.objects.get(hr_profile__user=request.user)
             credits_required = 10
@@ -234,6 +237,7 @@ def unlock_candidate(request, candidate_id):
                 }, status=status.HTTP_400_BAD_REQUEST)
             
             # Deduct credits
+            old_balance = wallet.balance
             wallet.balance -= credits_required
             wallet.total_spent += credits_required
             wallet.save()
@@ -253,6 +257,27 @@ def unlock_candidate(request, candidate_id):
                 credits_used=credits_required,
                 description=f'Unlocked candidate: {candidate.masked_name}'
             )
+            # Send credit deduction notification
+            try:
+                WorkfinaFCMService.send_to_user(
+                    user=request.user,
+                    title=f"Profile Unlocked! 🔓",
+                    body=f"You unlocked {candidate.masked_name}'s profile for {credits_required} credits. Balance: {wallet.balance}",
+                    notification_type='CREDIT_UPDATE',
+                    data={
+                        'candidate_id': str(candidate.id),
+                        'candidate_name': candidate.masked_name,
+                        'credits_used': credits_required,
+                        'old_balance': old_balance,
+                        'new_balance': wallet.balance,
+                        'action': 'unlock_profile'
+                    }
+                )
+                print(f'[DEBUG] Sent unlock notification to {request.user.email}')
+            except Exception as e:
+                print(f'[DEBUG] Failed to send unlock notification: {str(e)}')
+            
+                       
             
             # Return full candidate data
             serializer = FullCandidateSerializer(candidate)
@@ -1017,6 +1042,18 @@ def save_candidate_step(request):
                 'profile_step': step
             }
         )
+        # Get or create profile reminder tracker
+        reminder, reminder_created = ProfileStepReminder.objects.get_or_create(
+            user=request.user,
+            defaults={'current_step': step}
+        )
+        
+        # Update step progress
+        old_step = reminder.current_step
+        if step > old_step:
+            reminder.update_step(step)
+            print(f'[DEBUG] Updated profile step from {old_step} to {step} for {request.user.email}')
+                
         
         update_data = {'profile_step': step}
         
@@ -1182,6 +1219,27 @@ def save_candidate_step(request):
         
         # Step 4: Documents
         elif step == 4:
+            update_data['is_profile_completed'] = True
+            reminder.is_profile_completed = True
+            reminder.save()
+            
+            # Send profile completion notification
+            try:
+                WorkfinaFCMService.send_to_user(
+                    user=request.user,
+                    title="🎉 Profile Completed!",
+                    body="Great! Your profile is now complete. You're ready to connect with top recruiters!",
+                    notification_type='COMPLETE_PROFILE',
+                    data={
+                        'profile_completed': True,
+                        'step': step,
+                        'action': 'profile_complete'
+                    }
+                )
+                print(f'[DEBUG] Sent profile completion notification to {request.user.email}')
+            except Exception as e:
+                print(f'[DEBUG] Failed to send profile completion notification: {str(e)}')
+                        
             if 'resume' in request.FILES:
                 update_data['resume'] = request.FILES['resume']
             if 'video_intro' in request.FILES:
@@ -1253,7 +1311,85 @@ def get_public_filter_options(request):
         return Response({
             'success': True,
             'departments': [],
-            'religions': [],
-            'skills': [],
-            'languages': []
+            'religions': []
         })
+        
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def update_candidate_hiring_status(request, candidate_id):
+    """Update candidate hiring status (for HR users)"""
+    
+    if request.user.role != 'hr':
+        return Response({
+            'error': 'Only HR users can update hiring status'
+        }, status=403)
+    
+    try:
+        candidate = Candidate.objects.get(id=candidate_id, is_active=True)
+        
+        # Check if HR has unlocked this candidate
+        if not UnlockHistory.objects.filter(hr_user=request.user.hr_profile, candidate=candidate).exists():
+            return Response({
+                'error': 'Candidate must be unlocked to update hiring status'
+            }, status=403)
+        
+        new_status = request.data.get('status')
+        company_name = request.data.get('company_name', '')
+        position_title = request.data.get('position_title', '')
+        notes = request.data.get('notes', '')
+        
+        if new_status not in ['HIRED', 'ON_HOLD', 'REJECTED', 'WITHDRAWN']:
+            return Response({
+                'error': 'Invalid status'
+            }, status=400)
+        
+        # Update or create candidate status
+        from notifications.models import CandidateStatus
+        candidate_status, created = CandidateStatus.objects.update_or_create(
+            candidate=candidate,
+            defaults={
+                'status': new_status,
+                'updated_by': request.user.hr_profile,
+                'company_name': company_name,
+                'position_title': position_title,
+                'notes': notes
+            }
+        )
+        
+        # Send notification to candidate about status update
+        if new_status == 'HIRED':
+            try:
+                WorkfinaFCMService.send_to_user(
+                    user=candidate.user,
+                    title="🎉 Congratulations! You've been hired!",
+                    body=f"Great news! You've been selected for {position_title} at {company_name}. Check your profile for details.",
+                    notification_type='CANDIDATE_HIRED',
+                    data={
+                        'status': new_status,
+                        'company_name': company_name,
+                        'position_title': position_title,
+                        'hr_company': request.user.hr_profile.company_name
+                    }
+                )
+                print(f'[DEBUG] Sent hiring notification to candidate {candidate.user.email}')
+            except Exception as e:
+                print(f'[DEBUG] Failed to send hiring notification to candidate: {str(e)}')
+            
+            # Notify other HRs who unlocked this candidate
+            try:
+                WorkfinaFCMService.notify_hrs_about_hired_candidate(candidate)
+                print(f'[DEBUG] Notified other HRs about hired candidate {candidate.masked_name}')
+            except Exception as e:
+                print(f'[DEBUG] Failed to notify HRs about hired candidate: {str(e)}')
+        
+        return Response({
+            'success': True,
+            'message': f'Candidate status updated to {new_status}',
+            'status': new_status,
+            'candidate': candidate.masked_name
+        })
+        
+    except Candidate.DoesNotExist:
+        return Response({
+            'error': 'Candidate not found'
+        }, status=404)        

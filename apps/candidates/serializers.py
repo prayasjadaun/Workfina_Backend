@@ -61,9 +61,9 @@ class CandidateRegistrationSerializer(serializers.ModelSerializer):
         'video_intro': {'required': False},
         'profile_image': {'required': True},
         'experience_years': {'required': False},
-        'country': {'required': True},
-        'skills': {'required': True},
-        'willing_to_relocate':serializers.CharField(required=False)
+        'country': {'required': False},
+        'skills': {'required': False},
+        'willing_to_relocate': {'required': False}
     }
         
         def validate_willing_to_relocate(self, value):
