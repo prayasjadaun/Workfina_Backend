@@ -5,7 +5,7 @@ from .models import *
 class WorkExperienceInline(admin.TabularInline):
     model = WorkExperience
     extra = 1
-    fields = ['company_name', 'role_title', 'start_date', 'end_date', 'is_current', 'location', 'description']
+    fields = ['company_name', 'role_title', 'start_date', 'end_date', 'is_current', 'location','current_ctc', 'description']
 
 class EducationInline(admin.TabularInline):
     model = Education
@@ -79,7 +79,7 @@ class CandidateAdmin(admin.ModelAdmin):
             'fields': ('first_name', 'last_name', 'masked_name', 'phone', 'age')
         }),
         ('Professional', {
-            'fields': ('role', 'experience_years', 'current_ctc', 'expected_ctc', 'skills')
+            'fields': ('role', 'experience_years', 'skills')
         }),
         ('Availability', { 
             'fields': ('joining_availability', 'notice_period_details')
@@ -128,7 +128,7 @@ class CandidateFollowupAdmin(admin.ModelAdmin):
 
 @admin.register(WorkExperience)
 class WorkExperienceAdmin(admin.ModelAdmin):
-    list_display = ['candidate', 'company_name', 'role_title', 'start_date', 'end_date', 'is_current']
+    list_display = ['candidate', 'company_name', 'role_title','current_ctc','start_date', 'end_date', 'is_current']
     list_filter = ['is_current', 'start_date']
     search_fields = ['candidate__masked_name', 'company_name', 'role_title']
     raw_id_fields = ['candidate']

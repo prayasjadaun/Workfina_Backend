@@ -80,8 +80,8 @@ class Candidate(models.Model):
     
     role = models.ForeignKey(FilterOption, on_delete=models.SET_NULL, null=True, blank=True, related_name='role_candidates')
     experience_years = models.PositiveIntegerField()
-    current_ctc = models.DecimalField(max_digits=10, decimal_places=2,null=True, blank=True)
-    expected_ctc = models.DecimalField(max_digits=10, decimal_places=2,null=True, blank=True)
+    # current_ctc = models.DecimalField(max_digits=10, decimal_places=2,null=True, blank=True)
+    # expected_ctc = models.DecimalField(max_digits=10, decimal_places=2,null=True, blank=True)
     
     # Personal Information - Using FilterOption
     religion = models.ForeignKey(FilterOption, on_delete=models.SET_NULL, null=True, blank=True, related_name='religion_candidates')
@@ -182,6 +182,12 @@ class WorkExperience(models.Model):
     start_date = models.DateField()
     end_date = models.DateField(null=True, blank=True)  # Null for current job
     is_current = models.BooleanField(default=False)
+    current_ctc = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True
+    )
     location = models.CharField(max_length=255, blank=True)
     description = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
