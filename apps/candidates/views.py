@@ -1216,6 +1216,9 @@ def get_public_filter_options(request):
     try:
         dept_category = FilterCategory.objects.get(slug='department', is_active=True)
         religion_category = FilterCategory.objects.get(slug='religion', is_active=True)
+        skills_category = FilterCategory.objects.get(slug='skills', is_active=True)
+        languages_category = FilterCategory.objects.get(slug='languages', is_active=True)
+        
         
         departments = FilterOption.objects.filter(
             category=dept_category, 
@@ -1226,16 +1229,31 @@ def get_public_filter_options(request):
             category=religion_category,
             is_active=True
         ).order_by('display_order', 'name')
+
+        skills = FilterOption.objects.filter(
+            category=skills_category,
+            is_active=True
+        ).order_by('display_order', 'name')
+        
+        languages = FilterOption.objects.filter(
+            category=languages_category,
+            is_active=True
+        ).order_by('display_order', 'name')
+
         
         return Response({
             'success': True,
             'departments': [{'value': dept.slug, 'label': dept.name} for dept in departments],
-            'religions': [{'value': relig.slug, 'label': relig.name} for relig in religions]
+            'religions': [{'value': relig.slug, 'label': relig.name} for relig in religions],
+            'skills': [{'value': skill.slug, 'label': skill.name} for skill in skills],
+            'languages': [{'value': lang.slug, 'label': lang.name} for lang in languages]
         })
         
     except FilterCategory.DoesNotExist:
         return Response({
             'success': True,
             'departments': [],
-            'religions': []
+            'religions': [],
+            'skills': [],
+            'languages': []
         })

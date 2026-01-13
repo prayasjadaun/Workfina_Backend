@@ -7,7 +7,7 @@ User = get_user_model()
 class WorkExperienceSerializer(serializers.ModelSerializer):
     class Meta:
         model = WorkExperience
-        fields = ['id', 'company_name', 'role_title', 'start_date', 'end_date', 'is_current', 'location', 'description']
+        fields = ['id', 'company_name', 'role_title', 'start_date', 'end_date', 'is_current', 'current_ctc','location', 'description']
 
 class EducationSerializer(serializers.ModelSerializer):
     class Meta:
@@ -37,7 +37,7 @@ class CandidateRegistrationSerializer(serializers.ModelSerializer):
         model = Candidate
         fields = [
            'first_name','last_name', 'phone', 'age', 'role', 'experience_years',
-            'current_ctc', 'expected_ctc', 'religion', 'country',
+             'religion', 'country',
             'state', 'city', 'skills', 'resume', 'video_intro', 'profile_image',
             'languages', 'street_address', 'willing_to_relocate', 'career_objective','joining_availability', 'notice_period_details'
         ]
@@ -53,16 +53,16 @@ class CandidateRegistrationSerializer(serializers.ModelSerializer):
         'languages': {'required': True},
         'street_address': {'required': True},
         'career_objective': {'required': True},
-        'current_ctc': {'required': False},
-        'expected_ctc': {'required': False},
+        # 'current_ctc': {'required': False},
+        # 'expected_ctc': {'required': False},
         'joining_availability': {'required': True},
-        'notice_period_details': {'required': False},  
+        'notice_period_details': {'required': True},  
         'resume': {'required': False},
         'video_intro': {'required': False},
-        'profile_image': {'required': False},
+        'profile_image': {'required': True},
         'experience_years': {'required': False},
-        'country': {'required': False},
-        'skills': {'required': False},
+        'country': {'required': True},
+        'skills': {'required': True},
         'willing_to_relocate':serializers.CharField(required=False)
     }
         
@@ -231,7 +231,7 @@ class FullCandidateSerializer(serializers.ModelSerializer):
         model = Candidate
         fields = [
             'id', 'first_name', 'last_name', 'email', 'phone', 'age',
-            'role_name', 'experience_years', 'current_ctc', 'expected_ctc',
+            'role_name', 'experience_years',
             'religion_name', 'country_name', 'state_name', 'city_name',
             'skills', 'skills_list', 
             'resume_url', 'video_intro_url', 'profile_image_url', 'credits_used',
@@ -344,14 +344,14 @@ class CandidateUpdateSerializer(serializers.ModelSerializer):
         extra_kwargs = {
             'resume': {'required': False, 'allow_null': True},
             'video_intro': {'required': False, 'allow_null': True},
-            'profile_image': {'required': False, 'allow_null': True},
+            'profile_image': {'required': True, 'allow_null': False},
             'languages': {'required': False, 'allow_blank': True},
             'street_address': {'required': False, 'allow_blank': True},
             'willing_to_relocate': {'required': False},
             'work_experience': {'required': False, 'allow_blank': True},
             'career_objective': {'required': False, 'allow_blank': True},
             'joining_availability': {'required': False},
-            'notice_period_details': {'required': False, 'allow_blank': True},
+            'notice_period_details': {'required': True},
         }
 
     def validate(self, data):
