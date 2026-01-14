@@ -1,6 +1,8 @@
 from django.contrib import admin
 from django.urls import path, include
 
+import server.admin
+
 from drf_yasg.views import get_schema_view
 from drf_yasg import openapi
 from rest_framework.permissions import AllowAny
@@ -27,6 +29,7 @@ urlpatterns = [
     path('api/wallet/', include('apps.wallet.urls')),
     path('api/banner/', include('apps.banners.urls')),
     path('api/notifications/', include('apps.notifications.urls')),
+    path('api/app-version/', include('apps.app_version.urls')),
 
     path('swagger/', schema_view.with_ui('swagger', cache_timeout=0), name='swagger-ui'),
     path('redoc/', schema_view.with_ui('redoc', cache_timeout=0), name='redoc'),

@@ -145,10 +145,10 @@ class WorkfinaFCMService:
             if not template:
                 # Fallback welcome message
                 title = "Welcome to Workfina! 🎉"
-                body = f"Hi {user.username}, welcome to Workfina! Complete your profile to get started."
+                body = f"Hi {user.first_name or user.email}, welcome to Workfina! Complete your profile to get started."
             else:
                 # Use template with user context
-                context = Context({'user_name': user.username, 'user_email': user.email})
+                context = Context({'user_name': user.first_name or user.email, 'user_email': user.email})
                 title = Template(template.title).render(context)
                 body = Template(template.body).render(context)
             
@@ -188,7 +188,7 @@ class WorkfinaFCMService:
             
             if template:
                 context = Context({
-                    'user_name': user.username,
+                    'user_name': user.first_name or user.email,
                     'current_step': current_step,
                     'next_step': current_step + 1,
                     'reminder_type': reminder_type
@@ -199,7 +199,7 @@ class WorkfinaFCMService:
                 # Fallback messages based on reminder type
                 if reminder_type == 'first':
                     title = "Complete Your Profile 📋"
-                    body = f"Hi {user.username}, you're on step {current_step}. Complete your profile to find better opportunities!"
+                    body = f"Hi {user.first_name or user.email}, you're on step {current_step}. Complete your profile to find better opportunities!"
                 elif reminder_type == 'second':
                     title = "Don't Miss Out! Complete Profile 🚀"
                     body = f"Your profile is {(current_step-1)*25}% complete. Finish it now to get noticed by top recruiters!"
@@ -265,7 +265,7 @@ class WorkfinaFCMService:
                 if template:
                     context = Context({
                         'candidate_name': candidate.masked_name,
-                        'hr_name': hr_user.username,
+                        'hr_name': hr_user.first_name or hr_user.email,
                         'company': getattr(candidate.hiring_status, 'company_name', 'Unknown Company') if hasattr(candidate, 'hiring_status') else 'Unknown Company'
                     })
                     title = Template(template.title).render(context)
@@ -312,7 +312,7 @@ class WorkfinaFCMService:
             
             if template:
                 context = Context({
-                    'user_name': user.username,
+                    'user_name': user.first_name or user.email,
                     'credits_added': credits_added,
                     'current_balance': current_balance
                 })
@@ -320,7 +320,7 @@ class WorkfinaFCMService:
                 body = Template(template.body).render(context)
             else:
                 title = f"Credits Added! 💰"
-                body = f"Hi {user.username}, {credits_added} credits have been added to your account. Current balance: {current_balance}"
+                body = f"Hi {user.first_name or user.email}, {credits_added} credits have been added to your account. Current balance: {current_balance}"
             
             return WorkfinaFCMService.send_to_user(
                 user=user,
@@ -447,7 +447,7 @@ def send_welcome_notification(sender, instance, created, **kwargs):
                     user=instance,
                     template=template,
                     title=template.title,
-                    body=template.body.format(user_name=instance.username),
+                    body=template.body.format(user_name=instance.first_name or instance.email),
                     scheduled_for=timezone.now() + timedelta(seconds=30),
                     data_payload={'welcome': True, 'user_role': instance.role}
                 )

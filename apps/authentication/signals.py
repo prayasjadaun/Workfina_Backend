@@ -89,7 +89,7 @@ def create_profile_step_reminder_on_role_update(sender, instance, created, **kwa
             )
 
         # Send notification to all HR users about new candidate registration
-        candidate_name = f"{instance.first_name or instance.username}"
+        candidate_name = f"{instance.first_name or instance.email}"
         registration_time = timezone.now().strftime("%-d %B %Y at %-I:%M %p")
 
         notification_title = "New Candidate Registered"

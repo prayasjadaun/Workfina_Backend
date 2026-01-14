@@ -51,7 +51,7 @@ class UserNotificationSerializer(serializers.ModelSerializer):
 
 class ProfileStepReminderSerializer(serializers.ModelSerializer):
     user_email = serializers.CharField(source='user.email', read_only=True)
-    user_name = serializers.CharField(source='user.username', read_only=True)
+    user_name = serializers.CharField(source='user.first_name', read_only=True)
     needs_reminder = serializers.SerializerMethodField()
     next_reminder_type = serializers.SerializerMethodField()
     
@@ -81,7 +81,7 @@ class ProfileStepReminderSerializer(serializers.ModelSerializer):
 class CandidateStatusSerializer(serializers.ModelSerializer):
     candidate_name = serializers.CharField(source='candidate.masked_name', read_only=True)
     candidate_email = serializers.CharField(source='candidate.user.email', read_only=True)
-    updated_by_name = serializers.CharField(source='updated_by.user.username', read_only=True)
+    updated_by_name = serializers.CharField(source='updated_by.user.first_name', read_only=True)
     status_display = serializers.CharField(source='get_status_display', read_only=True)
     
     class Meta:
