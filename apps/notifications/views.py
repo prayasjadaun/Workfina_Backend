@@ -96,23 +96,21 @@ def get_notification_count(request):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def send_test_notification(request):
-    """Send test notification to current user (for development)"""
+    """Send test notification to current user"""
     if not request.user.is_staff:
-        return Response({
-            'error': 'Only staff users can send test notifications'
-        }, status=403)
-    
+        return Response({'error': 'Only staff users can send test notifications'}, status=403)
+
     title = request.data.get('title', 'Test Notification')
     body = request.data.get('body', 'This is a test notification from Workfina')
-    
+
     result = WorkfinaFCMService.send_to_user(
         user=request.user,
         title=title,
         body=body,
         notification_type='GENERAL',
-        data={'test': True}
+        data={'test': 'true'}
     )
-    
+
     return Response(result)
 
 

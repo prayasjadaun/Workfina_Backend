@@ -6,11 +6,12 @@ from django.contrib import messages
 from django.utils import timezone
 from django.contrib.auth import get_user_model
 from .models import (
-    NotificationTemplate, 
-    UserNotification, 
+    NotificationTemplate,
+    UserNotification,
     ProfileStepReminder,
     CandidateStatus,
-    NotificationLog
+    NotificationLog,
+    StepNotificationDetail
 )
 from .services import WorkfinaFCMService
 from django import forms
@@ -155,14 +156,25 @@ class NotificationTemplateAdmin(admin.ModelAdmin):
     duplicate_template.short_description = 'Duplicate selected templates'
 
 
+class NotificationLogInline(admin.TabularInline):
+    model = NotificationLog
+    extra = 0
+    can_delete = False
+    readonly_fields = ['log_type', 'message', 'metadata', 'created_at']
+    fields = ['log_type', 'message', 'created_at']
+
+    def has_add_permission(self, request, obj=None):
+        return False
+
+
 @admin.register(UserNotification)
 class UserNotificationAdmin(admin.ModelAdmin):
     list_display = [
         'title_preview', 'user_email', 'status', 'template_type',
-        'scheduled_for', 'sent_at', 'read_at'
+        'scheduled_for', 'sent_at', 'read_at', 'has_logs'
     ]
     list_filter = [
-        'status', 'template__notification_type', 'scheduled_for', 
+        'status', 'template__notification_type', 'scheduled_for',
         'sent_at', 'read_at'
     ]
     search_fields = ['title', 'body', 'user__email', 'user__username']
@@ -170,7 +182,8 @@ class UserNotificationAdmin(admin.ModelAdmin):
         'fcm_message_id', 'sent_at', 'read_at', 'created_at', 'error_message'
     ]
     date_hierarchy = 'created_at'
-    
+    inlines = [NotificationLogInline]
+
     fieldsets = (
         ('Notification Details', {
             'fields': ('user', 'template', 'title', 'body')
@@ -187,8 +200,13 @@ class UserNotificationAdmin(admin.ModelAdmin):
             'classes': ('collapse',)
         })
     )
-    
+
     actions = ['resend_failed_notifications', 'mark_as_read']
+
+    def has_logs(self, obj):
+        count = obj.notificationlog_set.count()
+        return f"{count} log(s)" if count > 0 else "-"
+    has_logs.short_description = 'Activity Logs'
     
     def title_preview(self, obj):
         return obj.title[:40] + '...' if len(obj.title) > 40 else obj.title
@@ -231,38 +249,82 @@ class UserNotificationAdmin(admin.ModelAdmin):
     mark_as_read.short_description = 'Mark as read'
 
 
-@admin.register(ProfileStepReminder)
-class ProfileStepReminderAdmin(admin.ModelAdmin):
-    list_display = [
-        'user_email', 'current_step', 'is_profile_completed',
-        'last_step_completed_at', 'reminders_sent', 'next_reminder'
-    ]
-    list_filter = [
-        'current_step', 'is_profile_completed', 'first_reminder_sent',
-        'second_reminder_sent', 'final_reminder_sent'
-    ]
-    search_fields = ['user__email', 'user__username']
-    readonly_fields = [
-        'user', 'first_reminder_at', 'second_reminder_at', 'final_reminder_at',
-        'created_at', 'updated_at'
-    ]
-    
+@admin.register(StepNotificationDetail)
+class StepNotificationDetailAdmin(admin.ModelAdmin):
+    list_display = ['step_number', 'heading', 'delay_hours', 'is_active', 'created_at']
+    list_filter = ['is_active', 'step_number']
+    search_fields = ['heading', 'description']
+    readonly_fields = ['created_at', 'updated_at']
+
     fieldsets = (
-        ('User Progress', {
-            'fields': ('user', 'current_step', 'last_step_completed_at', 'is_profile_completed')
+        ('Step Information', {
+            'fields': ('step_number', 'heading', 'description')
         }),
-        ('Reminder Status', {
-            'fields': (
-                ('first_reminder_sent', 'first_reminder_at'),
-                ('second_reminder_sent', 'second_reminder_at'), 
-                ('final_reminder_sent', 'final_reminder_at')
-            )
+        ('Notification Settings', {
+            'fields': ('delay_hours', 'is_active')
         }),
         ('Timestamps', {
             'fields': ('created_at', 'updated_at'),
             'classes': ('collapse',)
         })
     )
+
+
+@admin.register(ProfileStepReminder)
+class ProfileStepReminderAdmin(admin.ModelAdmin):
+    list_display = [
+        'user_email', 'current_step', 'step_completion_status',
+        'is_profile_completed', 'last_step_completed_at'
+    ]
+    list_filter = [
+        'current_step', 'is_profile_completed',
+        'step1_completed', 'step2_completed', 'step3_completed', 'step4_completed'
+    ]
+    search_fields = ['user__email', 'user__username']
+    readonly_fields = [
+        'step1_completed_at', 'step2_completed_at', 'step3_completed_at', 'step4_completed_at',
+        'first_reminder_at', 'second_reminder_at', 'final_reminder_at',
+        'last_step_completed_at', 'created_at', 'updated_at'
+    ]
+
+    fieldsets = (
+        ('User Progress', {
+            'fields': ('user', 'current_step', 'is_profile_completed')
+        }),
+        ('Step Completion Tracking', {
+            'fields': (
+                ('step1_completed', 'step1_completed_at', 'step1_reminder_sent'),
+                ('step2_completed', 'step2_completed_at', 'step2_reminder_sent'),
+                ('step3_completed', 'step3_completed_at', 'step3_reminder_sent'),
+                ('step4_completed', 'step4_completed_at', 'step4_reminder_sent'),
+            )
+        }),
+        ('Legacy Reminder Status', {
+            'fields': (
+                ('first_reminder_sent', 'first_reminder_at'),
+                ('second_reminder_sent', 'second_reminder_at'),
+                ('final_reminder_sent', 'final_reminder_at')
+            ),
+            'classes': ('collapse',)
+        }),
+        ('Timestamps', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        })
+    )
+
+    def step_completion_status(self, obj):
+        steps = []
+        if obj.step1_completed:
+            steps.append('1✓')
+        if obj.step2_completed:
+            steps.append('2✓')
+        if obj.step3_completed:
+            steps.append('3✓')
+        if obj.step4_completed:
+            steps.append('4✓')
+        return ' '.join(steps) if steps else 'None'
+    step_completion_status.short_description = 'Completed Steps'
     
     actions = ['send_manual_reminder', 'reset_reminders']
     
@@ -361,48 +423,6 @@ class CandidateStatusAdmin(admin.ModelAdmin):
         # Send notification to HR users who have unlocked this candidate
         if obj.status == 'HIRED':
             WorkfinaFCMService.notify_hrs_about_hired_candidate(obj.candidate)
-
-
-@admin.register(NotificationLog)
-class NotificationLogAdmin(admin.ModelAdmin):
-    list_display = [
-        'log_type', 'user_email', 'notification_title', 'message_preview', 'created_at'
-    ]
-    list_filter = ['log_type', 'created_at']
-    search_fields = ['message', 'user__email', 'notification__title']
-    readonly_fields = ['created_at']
-    date_hierarchy = 'created_at'
-    
-    fieldsets = (
-        ('Log Details', {
-            'fields': ('log_type', 'user', 'notification', 'message')
-        }),
-        ('Metadata', {
-            'fields': ('metadata',),
-            'classes': ('collapse',)
-        }),
-        ('Timestamp', {
-            'fields': ('created_at',)
-        })
-    )
-    
-    def user_email(self, obj):
-        return obj.user.email if obj.user else 'System'
-    user_email.short_description = 'User'
-    
-    def notification_title(self, obj):
-        return obj.notification.title if obj.notification else '-'
-    notification_title.short_description = 'Notification'
-    
-    def message_preview(self, obj):
-        return obj.message[:60] + '...' if len(obj.message) > 60 else obj.message
-    message_preview.short_description = 'Message Preview'
-    
-    def has_add_permission(self, request):
-        return False  # Don't allow manual creation
-    
-    def has_change_permission(self, request, obj=None):
-        return False  # Read-only logs
 
 
 # Custom admin actions for bulk notification sending

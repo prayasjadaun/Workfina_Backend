@@ -11,18 +11,22 @@ from apps.candidates.serializers import MaskedCandidateSerializer, FullCandidate
 class HRRegistrationView(generics.CreateAPIView):
     serializer_class = HRRegistrationSerializer
     permission_classes = [IsAuthenticated]
-    
+
     def post(self, request, *args, **kwargs):
         if request.user.role != 'hr':
             return Response({
                 'error': 'Only HR users can create HR profiles'
             }, status=status.HTTP_403_FORBIDDEN)
-        
+
+        # If profile already exists, update it instead of creating new
         if hasattr(request.user, 'hr_profile'):
-            return Response({
-                'error': 'HR profile already exists'
-            }, status=status.HTTP_400_BAD_REQUEST)
-        
+            profile = request.user.hr_profile
+            serializer = HRProfileSerializer(profile, data=request.data, partial=True)
+            if serializer.is_valid():
+                serializer.save()
+                return Response(serializer.data, status=status.HTTP_200_OK)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
         return super().post(request, *args, **kwargs)
 
 @api_view(['GET'])

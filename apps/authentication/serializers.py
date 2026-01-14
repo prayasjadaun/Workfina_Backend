@@ -71,10 +71,8 @@ class CreateAccountSerializer(serializers.Serializer):
     def create(self, validated_data):
         validated_data.pop('confirm_password')
         password = validated_data.pop('password')
-
-        # Generate username from email if not provided
-        if not validated_data.get('username'):
-            validated_data['username'] = validated_data['email'].split('@')[0]
+        # Remove username as User model doesn't have username field
+        validated_data.pop('username', None)
 
         user = User.objects.create_user(
             password=password,

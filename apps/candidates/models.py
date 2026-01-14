@@ -70,6 +70,19 @@ class Candidate(models.Model):
     profile_step = models.PositiveIntegerField(default=1)
     is_profile_completed = models.BooleanField(default=False)
 
+    # Step completion tracking
+    step1_completed = models.BooleanField(default=False, help_text="Basic information filled")
+    step1_completed_at = models.DateTimeField(null=True, blank=True)
+
+    step2_completed = models.BooleanField(default=False, help_text="Work experience added")
+    step2_completed_at = models.DateTimeField(null=True, blank=True)
+
+    step3_completed = models.BooleanField(default=False, help_text="Education information added")
+    step3_completed_at = models.DateTimeField(null=True, blank=True)
+
+    step4_completed = models.BooleanField(default=False, help_text="Profile fully completed")
+    step4_completed_at = models.DateTimeField(null=True, blank=True)
+
     # Basic Information
     # full_name = models.CharField(max_length=255)
     first_name = models.CharField(max_length=100)

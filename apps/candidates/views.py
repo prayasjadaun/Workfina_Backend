@@ -6,6 +6,7 @@ from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from datetime import datetime
+from django.utils import timezone
 
 from apps.recruiters.models import HRProfile
 from django.contrib.auth import get_user_model
@@ -822,25 +823,49 @@ def get_filter_categories(request):
 
 # ========== Notes & Followups APIs ==========
 
-@api_view(['POST'])
+@api_view(['POST', 'DELETE'])
 @permission_classes([IsAuthenticated])
-def add_candidate_note(request, candidate_id):
-    """Add note for a candidate - For HR users"""
-    
+def add_candidate_note(request, candidate_id, note_id=None):
+    """Add or delete note for a candidate - For HR users"""
+
     if request.user.role != 'hr':
         return Response({
-            'error': 'Only HR users can add notes'
+            'error': 'Only HR users can manage notes'
         }, status=status.HTTP_403_FORBIDDEN)
-    
+
     try:
         candidate = Candidate.objects.get(id=candidate_id, is_active=True)
-        
+
         # Check if HR has unlocked this candidate
         if not UnlockHistory.objects.filter(hr_user=request.user.hr_profile, candidate=candidate).exists():
             return Response({
-                'error': 'Candidate must be unlocked to add notes'
+                'error': 'Candidate must be unlocked to manage notes'
             }, status=status.HTTP_403_FORBIDDEN)
-        
+
+        # DELETE: Remove note
+        if request.method == 'DELETE':
+            if not note_id:
+                return Response({
+                    'error': 'Note ID is required for deletion'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            try:
+                note = CandidateNote.objects.get(
+                    id=note_id,
+                    hr_user=request.user.hr_profile,
+                    candidate=candidate
+                )
+                note.delete()
+                return Response({
+                    'success': True,
+                    'message': 'Note deleted successfully'
+                })
+            except CandidateNote.DoesNotExist:
+                return Response({
+                    'error': 'Note not found'
+                }, status=status.HTTP_404_NOT_FOUND)
+
+        # POST: Add note
         serializer = CandidateNoteSerializer(data=request.data)
         if serializer.is_valid():
             note = serializer.save(
@@ -857,31 +882,55 @@ def add_candidate_note(request, candidate_id):
                 'error': 'Validation failed',
                 'details': serializer.errors
             }, status=status.HTTP_400_BAD_REQUEST)
-            
+
     except Candidate.DoesNotExist:
         return Response({
             'error': 'Candidate not found'
         }, status=status.HTTP_404_NOT_FOUND)
 
-@api_view(['POST'])
+@api_view(['POST', 'DELETE'])
 @permission_classes([IsAuthenticated])
-def add_candidate_followup(request, candidate_id):
-    """Add followup for a candidate - For HR users"""
-    
+def add_candidate_followup(request, candidate_id, followup_id=None):
+    """Add or delete followup for a candidate - For HR users"""
+
     if request.user.role != 'hr':
         return Response({
-            'error': 'Only HR users can add followups'
+            'error': 'Only HR users can manage followups'
         }, status=status.HTTP_403_FORBIDDEN)
-    
+
     try:
         candidate = Candidate.objects.get(id=candidate_id, is_active=True)
-        
+
         # Check if HR has unlocked this candidate
         if not UnlockHistory.objects.filter(hr_user=request.user.hr_profile, candidate=candidate).exists():
             return Response({
-                'error': 'Candidate must be unlocked to add followups'
+                'error': 'Candidate must be unlocked to manage followups'
             }, status=status.HTTP_403_FORBIDDEN)
-        
+
+        # DELETE: Remove followup
+        if request.method == 'DELETE':
+            if not followup_id:
+                return Response({
+                    'error': 'Followup ID is required for deletion'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            try:
+                followup = CandidateFollowup.objects.get(
+                    id=followup_id,
+                    hr_user=request.user.hr_profile,
+                    candidate=candidate
+                )
+                followup.delete()
+                return Response({
+                    'success': True,
+                    'message': 'Followup deleted successfully'
+                })
+            except CandidateFollowup.DoesNotExist:
+                return Response({
+                    'error': 'Followup not found'
+                }, status=status.HTTP_404_NOT_FOUND)
+
+        # POST: Add followup
         serializer = CandidateFollowupSerializer(data=request.data)
         if serializer.is_valid():
             followup = serializer.save(
@@ -898,7 +947,7 @@ def add_candidate_followup(request, candidate_id):
                 'error': 'Validation failed',
                 'details': serializer.errors
             }, status=status.HTTP_400_BAD_REQUEST)
-            
+
     except Candidate.DoesNotExist:
         return Response({
             'error': 'Candidate not found'
@@ -1082,8 +1131,13 @@ def save_candidate_step(request):
             if request.data.get('joining_availability'):
                 update_data['joining_availability'] = request.data.get('joining_availability')
             if request.data.get('notice_period_details'):
-                update_data['notice_period_details'] = request.data.get('notice_period_details')    
-            
+                update_data['notice_period_details'] = request.data.get('notice_period_details')
+
+            # Mark step 1 as completed
+            if not candidate.step1_completed:
+                update_data['step1_completed'] = True
+                update_data['step1_completed_at'] = timezone.now()
+
             # Handle role
             role_value = request.data.get('role')
             if role_value:
@@ -1162,13 +1216,19 @@ def save_candidate_step(request):
         
         # Step 2: Work Experience
         elif step == 2:
+            # Handle joining availability (can be saved without work experience)
+            if request.data.get('joining_availability'):
+                update_data['joining_availability'] = request.data.get('joining_availability')
+            if request.data.get('notice_period_details'):
+                update_data['notice_period_details'] = request.data.get('notice_period_details')
+
             work_experience_data = request.data.get('work_experience')
             if work_experience_data:
                 candidate.work_experiences.all().delete()
-                
+
                 import json
                 work_exp_list = json.loads(work_experience_data)
-                
+
                 for exp_data in work_exp_list:
                     WorkExperience.objects.create(
                         candidate=candidate,
@@ -1180,7 +1240,7 @@ def save_candidate_step(request):
                         location=exp_data.get('location', ''),
                         description=exp_data.get('description', ''),
                     )
-            
+
             # Calculate experience
             total_exp = 0
             from datetime import datetime
@@ -1188,22 +1248,27 @@ def save_candidate_step(request):
                 start_year = exp.start_date.year
                 end_year = exp.end_date.year if exp.end_date else datetime.now().year
                 total_exp += (end_year - start_year)
-            
+
             if total_exp > 0:
                 update_data['experience_years'] = total_exp
+
+            # Mark step 2 as completed ONLY if work experience was added
+            if not candidate.step2_completed and candidate.work_experiences.exists():
+                update_data['step2_completed'] = True
+                update_data['step2_completed_at'] = timezone.now()
         
         # Step 3: Education + Skills
         elif step == 3:
             if request.data.get('skills'):
                 update_data['skills'] = request.data.get('skills')
-            
+
             education_data = request.data.get('education')
             if education_data:
                 candidate.educations.all().delete()
-                
+
                 import json
                 edu_list = json.loads(education_data)
-                
+
                 for edu_data in edu_list:
                     Education.objects.create(
                         candidate=candidate,
@@ -1216,13 +1281,23 @@ def save_candidate_step(request):
                         grade_percentage=float(edu_data.get('grade', '0').replace('%', '')) if edu_data.get('grade') else None,
                         location=edu_data.get('location', '')
                     )
-        
+
+            # Mark step 3 as completed
+            if not candidate.step3_completed:
+                update_data['step3_completed'] = True
+                update_data['step3_completed_at'] = timezone.now()
+
         # Step 4: Documents
         elif step == 4:
             update_data['is_profile_completed'] = True
             reminder.is_profile_completed = True
             reminder.save()
-            
+
+            # Mark step 4 as completed
+            if not candidate.step4_completed:
+                update_data['step4_completed'] = True
+                update_data['step4_completed_at'] = timezone.now()
+
             # Send profile completion notification
             try:
                 WorkfinaFCMService.send_to_user(
@@ -1239,7 +1314,7 @@ def save_candidate_step(request):
                 print(f'[DEBUG] Sent profile completion notification to {request.user.email}')
             except Exception as e:
                 print(f'[DEBUG] Failed to send profile completion notification: {str(e)}')
-                        
+
             if 'resume' in request.FILES:
                 update_data['resume'] = request.FILES['resume']
             if 'video_intro' in request.FILES:

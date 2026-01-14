@@ -37,18 +37,42 @@ class SimpleFCM:
                 raise e
     
     @classmethod
-    def send_to_token(cls, token, title, body, data=None):
+    def send_to_token(cls, token, title, body, data=None, play_sound=True):
         """Send notification to single FCM token"""
         logger.info(f"Sending notification to token: {token[:20]}... - Title: {title}")
         cls.initialize()
 
         try:
+            # Android notification config with sound
+            android_config = messaging.AndroidConfig(
+                priority='high',
+                notification=messaging.AndroidNotification(
+                    sound='default' if play_sound else None,
+                    channel_id='workfina_notifications'
+                )
+            )
+
+            # iOS/APNs notification config with sound
+            apns_config = messaging.APNSConfig(
+                payload=messaging.APNSPayload(
+                    aps=messaging.Aps(
+                        sound='default' if play_sound else None,
+                        badge=1
+                    )
+                )
+            )
+
+            # Convert all data values to strings (FCM requirement)
+            string_data = {k: str(v) for k, v in (data or {}).items()}
+
             message = messaging.Message(
                 notification=messaging.Notification(
                     title=title,
                     body=body,
                 ),
-                data=data or {},
+                android=android_config,
+                apns=apns_config,
+                data=string_data,
                 token=token,
             )
 
@@ -72,20 +96,44 @@ class SimpleFCM:
             }
     
     @classmethod
-    def send_multicast(cls, tokens, title, body, data=None):
+    def send_multicast(cls, tokens, title, body, data=None, play_sound=True):
         """Send notification to multiple FCM tokens"""
         cls.initialize()
-        
+
         try:
+            # Android notification config with sound
+            android_config = messaging.AndroidConfig(
+                priority='high',
+                notification=messaging.AndroidNotification(
+                    sound='default' if play_sound else None,
+                    channel_id='workfina_notifications'
+                )
+            )
+
+            # iOS/APNs notification config with sound
+            apns_config = messaging.APNSConfig(
+                payload=messaging.APNSPayload(
+                    aps=messaging.Aps(
+                        sound='default' if play_sound else None,
+                        badge=1
+                    )
+                )
+            )
+
+            # Convert all data values to strings (FCM requirement)
+            string_data = {k: str(v) for k, v in (data or {}).items()}
+
             message = messaging.MulticastMessage(
                 notification=messaging.Notification(
                     title=title,
                     body=body,
                 ),
-                data=data or {},
+                android=android_config,
+                apns=apns_config,
+                data=string_data,
                 tokens=tokens,
             )
-            
+
             response = messaging.send_multicast(message)
             logger.info(f"FCM multicast sent: {response.success_count}/{len(tokens)} successful")
             

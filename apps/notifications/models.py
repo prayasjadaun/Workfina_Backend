@@ -16,6 +16,8 @@ class NotificationTemplate(models.Model):
         ('GENERAL', 'General Announcement'),
         ('WELCOME', 'Welcome Message'),
         ('CREDIT_UPDATE', 'Credit Update'),
+        ('CANDIDATE_REGISTERED', 'Candidate Registered'),
+        ('FOLLOWUP_REMINDER', 'Follow-up Reminder'),
     ]
     
     RECIPIENT_TYPES = [
@@ -94,24 +96,63 @@ class UserNotification(models.Model):
             self.save()
 
 
+class StepNotificationDetail(models.Model):
+    """Configuration for step-wise notifications"""
+    step_number = models.PositiveIntegerField(unique=True)
+    heading = models.CharField(max_length=200)
+    description = models.TextField(max_length=500)
+    delay_hours = models.PositiveIntegerField(help_text="Delay in hours before sending notification")
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['step_number']
+        verbose_name = 'Step Notification Detail'
+        verbose_name_plural = 'Step Notification Details'
+
+    def __str__(self):
+        return f"Step {self.step_number}: {self.heading}"
+
+
 class ProfileStepReminder(models.Model):
     """Track profile completion reminders for candidates"""
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='step_reminder')
     current_step = models.PositiveIntegerField(default=1)
     last_step_completed_at = models.DateTimeField(auto_now_add=True)
-    
-    # Reminder schedule
+
+    # Step 1 completion tracking
+    step1_completed = models.BooleanField(default=False)
+    step1_completed_at = models.DateTimeField(null=True, blank=True)
+    step1_reminder_sent = models.BooleanField(default=False)
+
+    # Step 2 completion tracking
+    step2_completed = models.BooleanField(default=False)
+    step2_completed_at = models.DateTimeField(null=True, blank=True)
+    step2_reminder_sent = models.BooleanField(default=False)
+
+    # Step 3 completion tracking
+    step3_completed = models.BooleanField(default=False)
+    step3_completed_at = models.DateTimeField(null=True, blank=True)
+    step3_reminder_sent = models.BooleanField(default=False)
+
+    # Step 4 completion tracking (final step)
+    step4_completed = models.BooleanField(default=False)
+    step4_completed_at = models.DateTimeField(null=True, blank=True)
+    step4_reminder_sent = models.BooleanField(default=False)
+
+    # Legacy reminder fields (kept for backward compatibility)
     first_reminder_sent = models.BooleanField(default=False)
     first_reminder_at = models.DateTimeField(null=True, blank=True)
-    
+
     second_reminder_sent = models.BooleanField(default=False)
     second_reminder_at = models.DateTimeField(null=True, blank=True)
-    
+
     final_reminder_sent = models.BooleanField(default=False)
     final_reminder_at = models.DateTimeField(null=True, blank=True)
-    
+
     is_profile_completed = models.BooleanField(default=False)
-    
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     

@@ -118,13 +118,79 @@ class CandidateNoteAdmin(admin.ModelAdmin):
         return obj.note_text[:50] + '...' if len(obj.note_text) > 50 else obj.note_text
     note_text_preview.short_description = 'Note Preview'
 
+class CandidateFollowupInline(admin.TabularInline):
+    model = CandidateFollowup
+    extra = 0
+    fields = ['hr_user', 'followup_date', 'notes', 'is_completed']
+    readonly_fields = ['created_at']
+
+
 @admin.register(CandidateFollowup)
 class CandidateFollowupAdmin(admin.ModelAdmin):
-    list_display = ['hr_user', 'candidate', 'followup_date', 'is_completed', 'created_at']
+    list_display = ['hr_user', 'candidate', 'followup_date', 'is_completed', 'is_upcoming', 'created_at']
     list_filter = ['is_completed', 'followup_date', 'created_at']
     search_fields = ['hr_user__user__email', 'candidate__masked_name', 'notes']
     readonly_fields = ['created_at', 'updated_at']
     raw_id_fields = ['hr_user', 'candidate']
+    actions = ['mark_as_completed', 'send_followup_reminder']
+
+    def is_upcoming(self, obj):
+        from django.utils import timezone
+        if not obj.is_completed and obj.followup_date > timezone.now():
+            return "Yes"
+        return "No"
+    is_upcoming.short_description = 'Upcoming'
+
+    def mark_as_completed(self, request, queryset):
+        count = queryset.update(is_completed=True)
+        self.message_user(request, f'{count} follow-up(s) marked as completed.')
+    mark_as_completed.short_description = 'Mark as completed'
+
+    def send_followup_reminder(self, request, queryset):
+        from apps.notifications.models import UserNotification, NotificationTemplate, NotificationLog
+        from django.utils import timezone
+
+        count = 0
+        for followup in queryset.filter(is_completed=False):
+            followup_time = followup.followup_date.strftime("%-d %B %Y at %-I:%M %p")
+            candidate_name = followup.candidate.masked_name
+
+            notification_title = "Follow-up Reminder"
+            notification_body = f"Follow-up reminder for {candidate_name} scheduled at {followup_time}"
+
+            try:
+                template = NotificationTemplate.objects.filter(
+                    notification_type='FOLLOWUP_REMINDER',
+                    is_active=True
+                ).first()
+
+                if template:
+                    notification_title = template.title.format(
+                        candidate_name=candidate_name,
+                        followup_time=followup_time
+                    )
+                    notification_body = template.body.format(
+                        candidate_name=candidate_name,
+                        followup_time=followup_time,
+                        notes=followup.notes or "No notes"
+                    )
+            except Exception:
+                pass
+
+            UserNotification.objects.create(
+                user=followup.hr_user.user,
+                title=notification_title,
+                body=notification_body,
+                data_payload={
+                    'type': 'FOLLOWUP_REMINDER',
+                    'followup_id': str(followup.id),
+                    'candidate_id': str(followup.candidate.id)
+                }
+            )
+            count += 1
+
+        self.message_user(request, f'Sent {count} follow-up reminder(s).')
+    send_followup_reminder.short_description = 'Send follow-up reminder now'
 
 @admin.register(WorkExperience)
 class WorkExperienceAdmin(admin.ModelAdmin):

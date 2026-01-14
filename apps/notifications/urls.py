@@ -27,7 +27,7 @@ urlpatterns = [
     path('settings/', get_notification_settings, name='notification-settings'),
     path('settings/update/', update_notification_settings, name='update-notification-settings'),
     
-    # Testing endpoints
+    # Testing endpoints (staff only)
     path('test/', send_test_notification, name='send-test-notification'),
     path('trigger-reminder/', trigger_profile_reminder, name='trigger-profile-reminder'),
     
