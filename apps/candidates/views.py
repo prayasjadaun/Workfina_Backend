@@ -84,6 +84,7 @@ class CandidateRegistrationView(generics.CreateAPIView):
                                 start_date=f"{exp_data.get('start_year')}-{_month_to_number(exp_data.get('start_month'))}-01",
                                 end_date=f"{exp_data.get('end_year')}-{_month_to_number(exp_data.get('end_month'))}-01" if not exp_data.get('is_current') and exp_data.get('end_year') else None,
                                 is_current=exp_data.get('is_current', False),
+                                current_ctc=float(exp_data.get('ctc', 0)) if exp_data.get('ctc') else None,  
                                 location=exp_data.get('location', ''),
                                 description=exp_data.get('description', ''),
                             )
@@ -392,6 +393,7 @@ def update_candidate_profile(request):
                         start_date=f"{exp_data.get('start_year')}-{_month_to_number(exp_data.get('start_month'))}-01",
                         end_date=f"{exp_data.get('end_year')}-{_month_to_number(exp_data.get('end_month'))}-01" if not exp_data.get('is_current') and exp_data.get('end_year') else None,
                         is_current=exp_data.get('is_current', False),
+                        current_ctc=float(exp_data.get('ctc', 0)) if exp_data.get('ctc') else None, 
                         location=exp_data.get('location', ''),
                         description=exp_data.get('description', ''),
                     )
@@ -1237,6 +1239,7 @@ def save_candidate_step(request):
                         start_date=f"{exp_data.get('start_year')}-{_month_to_number(exp_data.get('start_month'))}-01",
                         end_date=f"{exp_data.get('end_year')}-{_month_to_number(exp_data.get('end_month'))}-01" if not exp_data.get('is_current') and exp_data.get('end_year') else None,
                         is_current=exp_data.get('is_current', False),
+                        current_ctc=float(exp_data.get('ctc', 0)) if exp_data.get('ctc') else None,
                         location=exp_data.get('location', ''),
                         description=exp_data.get('description', ''),
                     )
