@@ -1,6 +1,8 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from .models import Candidate, UnlockHistory, FilterCategory, FilterOption, CandidateNote, CandidateFollowup, WorkExperience, Education
+from django.utils import timezone
+import pytz
 
 User = get_user_model()
 
@@ -193,12 +195,12 @@ class MaskedCandidateSerializer(serializers.ModelSerializer):
     role_name = serializers.CharField(source='role.name', read_only=True)
     city_name = serializers.CharField(source='city.name', read_only=True)
     profile_image_url = serializers.SerializerMethodField()
-    
+
     class Meta:
         model = Candidate
         fields = [
             'id', 'masked_name', 'role_name', 'experience_years',
-            'city_name', 'age', 'skills', 'profile_image_url', 'is_active'
+            'city_name', 'age', 'skills', 'profile_image_url', 'is_active', 'is_available_for_hiring'
         ]
     
     def get_profile_image_url(self, obj):
@@ -217,13 +219,14 @@ class FullCandidateSerializer(serializers.ModelSerializer):
     resume_url = serializers.SerializerMethodField()
     video_intro_url = serializers.SerializerMethodField()
     profile_image_url = serializers.SerializerMethodField()
-    
+    last_availability_update = serializers.SerializerMethodField()
+
     role_name = serializers.CharField(source='role.name', read_only=True)
     religion_name = serializers.CharField(source='religion.name', read_only=True)
     country_name = serializers.CharField(source='country.name', read_only=True)
     state_name = serializers.CharField(source='state.name', read_only=True)
     city_name = serializers.CharField(source='city.name', read_only=True)
-    
+
     work_experiences = WorkExperienceSerializer(many=True, read_only=True)
     educations = EducationSerializer(many=True, read_only=True)
 
@@ -233,11 +236,12 @@ class FullCandidateSerializer(serializers.ModelSerializer):
             'id', 'first_name', 'last_name', 'email', 'phone', 'age',
             'role_name', 'experience_years',
             'religion_name', 'country_name', 'state_name', 'city_name',
-            'skills', 'skills_list', 
+            'skills', 'skills_list',
             'resume_url', 'video_intro_url', 'profile_image_url', 'credits_used',
             'languages', 'street_address', 'willing_to_relocate', 'career_objective',
             'work_experiences', 'educations','profile_step', 'is_profile_completed',
-            'joining_availability', 'notice_period_details'
+            'joining_availability', 'notice_period_details',
+            'is_available_for_hiring', 'last_availability_update'
         ]
     
     def get_skills_list(self, obj):
@@ -258,13 +262,20 @@ class FullCandidateSerializer(serializers.ModelSerializer):
                 return request.build_absolute_uri(obj.video_intro.url)
             return obj.video_intro.url
         return None
-    
+
     def get_profile_image_url(self, obj):
         if hasattr(obj, 'profile_image') and obj.profile_image:
             request = self.context.get('request')
             if request:
                 return request.build_absolute_uri(obj.profile_image.url)
             return obj.profile_image.url
+        return None
+
+    def get_last_availability_update(self, obj):
+        if obj.last_availability_update:
+            ist = pytz.timezone('Asia/Kolkata')
+            ist_time = obj.last_availability_update.astimezone(ist)
+            return ist_time.strftime('%d %b %Y, %I:%M %p IST')
         return None
 
 

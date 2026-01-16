@@ -388,25 +388,25 @@ class WorkfinaFCMService:
         """Check all users who need profile completion reminders (for cron/celery)"""
         try:
             from .models import ProfileStepReminder, NotificationLog
-            
+
             # Get all users who need reminders
             reminders = ProfileStepReminder.objects.filter(is_profile_completed=False)
-            
+
             sent_count = 0
-            
+
             for reminder in reminders:
                 needs_reminder, reminder_type = reminder.needs_reminder()
-                
+
                 if needs_reminder:
                     result = WorkfinaFCMService.send_profile_step_reminder(
                         user=reminder.user,
                         current_step=reminder.current_step,
                         reminder_type=reminder_type
                     )
-                    
+
                     if result.get('success'):
                         sent_count += 1
-                        
+
                     # Log the reminder activity
                     NotificationLog.objects.create(
                         log_type='REMINDER_SCHEDULED',
@@ -414,13 +414,88 @@ class WorkfinaFCMService:
                         message=f'Profile step reminder ({reminder_type}) sent to step {reminder.current_step}',
                         metadata={'reminder_type': reminder_type, 'step': reminder.current_step}
                     )
-            
+
             logger.info(f'Profile reminder check completed: {sent_count} reminders sent')
             return {'sent_count': sent_count}
-            
+
         except Exception as e:
             logger.error(f'Error checking profile reminders: {str(e)}')
             return {'error': str(e)}
+
+    @staticmethod
+    def send_daily_availability_reminder():
+        """Send daily 8 AM availability reminder to all candidates (for cron/celery)"""
+        try:
+            from apps.candidates.models import Candidate
+            from .models import NotificationTemplate, NotificationLog
+
+            # Get all active candidates with completed profiles
+            candidates = Candidate.objects.filter(
+                is_active=True,
+                is_profile_completed=True
+            ).select_related('user')
+
+            # Get template if exists
+            template = NotificationTemplate.objects.filter(
+                notification_type='AVAILABILITY_REMINDER',
+                recipient_type__in=['ALL', 'CANDIDATE'],
+                is_active=True
+            ).first()
+
+            success_count = 0
+            failure_count = 0
+
+            for candidate in candidates:
+                user = candidate.user
+
+                # Skip if no FCM token
+                if not user.fcm_token:
+                    continue
+
+                if template:
+                    title = template.title
+                    body = template.body.format(
+                        user_name=user.first_name or user.email,
+                        current_status='Available' if candidate.is_available_for_hiring else 'Not Available'
+                    )
+                else:
+                    title = "Are you still available for hiring?"
+                    body = f"Hi {user.first_name or 'there'}! Please confirm if you're still open to new job opportunities. Update your availability status."
+
+                result = WorkfinaFCMService.send_to_user(
+                    user=user,
+                    title=title,
+                    body=body,
+                    notification_type='AVAILABILITY_REMINDER',
+                    data={
+                        'action': 'availability_check',
+                        'current_status': candidate.is_available_for_hiring,
+                        'candidate_id': str(candidate.id)
+                    }
+                )
+
+                if result.get('success'):
+                    success_count += 1
+                else:
+                    failure_count += 1
+
+                # Log the notification
+                NotificationLog.objects.create(
+                    log_type='AVAILABILITY_REMINDER',
+                    user=user,
+                    message=f'Daily availability reminder sent to {user.email}',
+                    metadata={
+                        'success': result.get('success', False),
+                        'candidate_id': str(candidate.id)
+                    }
+                )
+
+            logger.info(f'Daily availability reminders sent: {success_count} success, {failure_count} failed')
+            return {'success_count': success_count, 'failure_count': failure_count}
+
+        except Exception as e:
+            logger.error(f'Error sending daily availability reminders: {str(e)}')
+            return {'success': False, 'error': str(e)}
 
 
 # Signal handlers for automatic notifications

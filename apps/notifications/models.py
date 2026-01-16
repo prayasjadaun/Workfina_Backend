@@ -18,6 +18,7 @@ class NotificationTemplate(models.Model):
         ('CREDIT_UPDATE', 'Credit Update'),
         ('CANDIDATE_REGISTERED', 'Candidate Registered'),
         ('FOLLOWUP_REMINDER', 'Follow-up Reminder'),
+        ('AVAILABILITY_REMINDER', 'Availability Reminder'),
     ]
     
     RECIPIENT_TYPES = [

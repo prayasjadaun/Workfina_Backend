@@ -69,6 +69,45 @@ def update_hr_profile(request):
 from django.core.paginator import Paginator
 
 
+@api_view(['GET'])
+def get_all_recruiters(request):
+    """Get all recruiters/HR profiles - Public endpoint"""
+
+    # No authentication required - anyone can view recruiters list
+
+    # Get pagination parameters
+    page = int(request.query_params.get('page', 1))
+    page_size = int(request.query_params.get('page_size', 20))
+
+    # Get all HR profiles
+    queryset = HRProfile.objects.select_related('user').all()
+
+    # Optional: Filter by verification status
+    is_verified = request.query_params.get('is_verified')
+    if is_verified is not None:
+        queryset = queryset.filter(is_verified=is_verified.lower() == 'true')
+
+    # Apply pagination
+    paginator = Paginator(queryset, page_size)
+    recruiters_page = paginator.get_page(page)
+
+    # Serialize recruiters
+    serializer = HRProfileSerializer(recruiters_page, many=True, context={'request': request})
+
+    return Response({
+        'success': True,
+        'recruiters': serializer.data,
+        'pagination': {
+            'current_page': page,
+            'page_size': page_size,
+            'total_pages': paginator.num_pages,
+            'total_count': paginator.count,
+            'has_next': recruiters_page.has_next(),
+            'has_previous': recruiters_page.has_previous(),
+        }
+    })
+
+
 def normalize_slug(value: str) -> str:
     """
     Converts slug to human readable text
@@ -124,8 +163,11 @@ def filter_candidates(request):
     page = int(request.query_params.get('page', 1))
     page_size = int(request.query_params.get('page_size', 20))
     
-    # Base queryset - FIXED: removed 'education' field
-    queryset = Candidate.objects.filter(is_active=True).select_related(
+    # Base queryset - Only show actual candidates, not HR/Recruiter profiles
+    queryset = Candidate.objects.filter(
+        is_active=True,
+        user__role='candidate'
+    ).select_related(
         'role', 'religion', 'country', 'state', 'city'
     )
     

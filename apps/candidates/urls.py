@@ -1,12 +1,14 @@
 from django.urls import path
 from .views import *
-from .views import save_candidate_step
+from .views import save_candidate_step, get_candidate_availability, update_candidate_availability
 
 
 urlpatterns = [
     path('register/', CandidateRegistrationView.as_view(), name='candidate-register'),
     path('profile/', get_candidate_profile, name='candidate-profile'),
-    path('profile/update/', update_candidate_profile, name='candidate-profile-update'),  
+    path('profile/update/', update_candidate_profile, name='candidate-profile-update'),
+    path('availability/', get_candidate_availability, name='candidate-availability'),
+    path('availability/update/', update_candidate_availability, name='update-candidate-availability'),
     path('list/', CandidateListView.as_view(), name='candidate-list'),
     path('<uuid:candidate_id>/unlock/', unlock_candidate, name='unlock-candidate'),
     path('unlocked/', get_unlocked_candidates, name='unlocked-candidates'),

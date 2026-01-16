@@ -11,5 +11,6 @@ class CandidatesConfig(AppConfig):
 
         # Start scheduler only in main process (not in migrations/shell)
         if os.environ.get('RUN_MAIN') == 'true':
-            from server.scheduler import get_scheduler
+            from server.scheduler import get_scheduler, start_daily_jobs
             get_scheduler()
+            start_daily_jobs()

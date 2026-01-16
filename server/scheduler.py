@@ -142,3 +142,32 @@ def cancel_followup_notification(followup_id):
         logger.info(f"Cancelled notification for followup {followup_id}")
     except:
         pass
+
+
+def send_daily_availability_reminder():
+    """Send daily availability reminder to all candidates at 8 AM"""
+    from apps.notifications.services import WorkfinaFCMService
+
+    try:
+        result = WorkfinaFCMService.send_daily_availability_reminder()
+        logger.info(f"Daily availability reminder completed: {result}")
+    except Exception as e:
+        logger.error(f"Error in daily availability reminder: {e}")
+
+
+def start_daily_jobs():
+    """Start all daily scheduled jobs"""
+    sched = get_scheduler()
+
+    # Daily 8 AM availability reminder for candidates
+    sched.add_job(
+        send_daily_availability_reminder,
+        'cron',
+        hour=8,
+        minute=0,
+        id='daily_availability_reminder',
+        replace_existing=True,
+        timezone='Asia/Kolkata'
+    )
+
+    logger.info("Daily jobs scheduled: availability reminder at 8 AM IST")

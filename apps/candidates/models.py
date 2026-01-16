@@ -132,6 +132,8 @@ class Candidate(models.Model):
 
     # Meta Information
     is_active = models.BooleanField(default=True)
+    is_available_for_hiring = models.BooleanField(default=True, help_text="Is candidate currently available for hiring opportunities")
+    last_availability_update = models.DateTimeField(null=True, blank=True, help_text="Last time candidate updated their availability status")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     

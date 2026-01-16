@@ -140,12 +140,12 @@ class CandidateRegistrationView(generics.CreateAPIView):
 
 class CandidateListView(generics.ListAPIView):
     """API to list masked candidates with filters - For HR users"""
-    
-    queryset = Candidate.objects.filter(is_active=True)
+
+    queryset = Candidate.objects.filter(is_active=True, is_available_for_hiring=True)
     serializer_class = MaskedCandidateSerializer
     permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend, SearchFilter]
-    filterset_fields = ['role', 'city', 'state', 'religion']
+    filterset_fields = ['role', 'city', 'state', 'religion', 'is_available_for_hiring']
     search_fields = ['skills']
     
     def get(self, request, *args, **kwargs):
@@ -1392,6 +1392,143 @@ def get_public_filter_options(request):
             'religions': []
         })
         
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_candidate_availability(request):
+    """Get candidate's current availability status for hiring with message from admin"""
+
+    if request.user.role != 'candidate':
+        return Response({
+            'error': 'Only candidates can access this'
+        }, status=status.HTTP_403_FORBIDDEN)
+
+    try:
+        candidate = Candidate.objects.get(user=request.user)
+
+        # Check if we should show the prompt (show if date has changed)
+        should_show_prompt = True
+        if candidate.last_availability_update:
+            import pytz
+            ist = pytz.timezone('Asia/Kolkata')
+
+            # Get current date in IST
+            current_date = timezone.now().astimezone(ist).date()
+
+            # Get last update date in IST
+            last_update_date = candidate.last_availability_update.astimezone(ist).date()
+
+            # Show prompt only if current date is different from last update date
+            should_show_prompt = current_date != last_update_date
+
+        # Get message from NotificationTemplate (admin can change this)
+        from apps.notifications.models import NotificationTemplate
+        template = NotificationTemplate.objects.filter(
+            notification_type='AVAILABILITY_REMINDER',
+            recipient_type__in=['ALL', 'CANDIDATE'],
+            is_active=True
+        ).first()
+
+        if template:
+            title = template.title
+            message = template.body
+        else:
+            title = "Are you still available for hiring?"
+            message = "Please confirm if you're still open to new job opportunities."
+
+        # Format last_availability_update to IST
+        last_update_ist = None
+        if candidate.last_availability_update:
+            import pytz
+            ist = pytz.timezone('Asia/Kolkata')
+            last_update_ist = candidate.last_availability_update.astimezone(ist).strftime('%d %b %Y, %I:%M %p IST')
+
+        return Response({
+            'success': True,
+            'is_available_for_hiring': candidate.is_available_for_hiring,
+            'last_availability_update': last_update_ist,
+            'should_show_prompt': should_show_prompt,
+            'title': title,
+            'message': message
+        })
+    except Candidate.DoesNotExist:
+        return Response({
+            'error': 'Profile not found'
+        }, status=status.HTTP_404_NOT_FOUND)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def update_candidate_availability(request):
+    """Update candidate's availability status for hiring"""
+
+    if request.user.role != 'candidate':
+        return Response({
+            'error': 'Only candidates can update their availability'
+        }, status=status.HTTP_403_FORBIDDEN)
+
+    try:
+        candidate = Candidate.objects.get(user=request.user)
+
+        is_available = request.data.get('is_available_for_hiring')
+        if is_available is None:
+            return Response({
+                'error': 'is_available_for_hiring field is required'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        # Convert to boolean
+        if isinstance(is_available, str):
+            is_available = is_available.lower() in ['true', '1', 'yes']
+
+        # Store old availability status to check if it changed
+        old_availability = candidate.is_available_for_hiring
+
+        candidate.is_available_for_hiring = is_available
+        candidate.last_availability_update = timezone.now()
+        candidate.save()
+
+        # If candidate marked themselves as NOT available (hired/unavailable)
+        # Notify all recruiters who unlocked this candidate
+        if old_availability and not is_available:
+            try:
+                # Get all HR users who unlocked this candidate
+                unlocked_hrs = UnlockHistory.objects.filter(
+                    candidate=candidate
+                ).select_related('hr_user__user')
+
+                # Send notification to each HR
+                for unlock_history in unlocked_hrs:
+                    hr_user = unlock_history.hr_user.user
+                    try:
+                        WorkfinaFCMService.send_to_user(
+                            user=hr_user,
+                            title="Candidate No Longer Available",
+                            body=f"{candidate.masked_name} is no longer available for hiring opportunities.",
+                            notification_type='CANDIDATE_UNAVAILABLE',
+                            data={
+                                'candidate_id': str(candidate.id),
+                                'candidate_name': candidate.masked_name,
+                                'is_available': False,
+                                'action': 'candidate_unavailable'
+                            }
+                        )
+                        print(f'[DEBUG] Sent unavailability notification to HR: {hr_user.email}')
+                    except Exception as e:
+                        print(f'[DEBUG] Failed to send notification to HR {hr_user.email}: {str(e)}')
+            except Exception as e:
+                print(f'[DEBUG] Error notifying HRs about candidate unavailability: {str(e)}')
+
+        return Response({
+            'success': True,
+            'message': 'Availability status updated successfully',
+            'is_available_for_hiring': candidate.is_available_for_hiring,
+            'last_availability_update': candidate.last_availability_update
+        })
+    except Candidate.DoesNotExist:
+        return Response({
+            'error': 'Profile not found'
+        }, status=status.HTTP_404_NOT_FOUND)
+
+
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def update_candidate_hiring_status(request, candidate_id):
