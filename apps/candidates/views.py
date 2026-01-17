@@ -84,7 +84,7 @@ class CandidateRegistrationView(generics.CreateAPIView):
                                 start_date=f"{exp_data.get('start_year')}-{_month_to_number(exp_data.get('start_month'))}-01",
                                 end_date=f"{exp_data.get('end_year')}-{_month_to_number(exp_data.get('end_month'))}-01" if not exp_data.get('is_current') and exp_data.get('end_year') else None,
                                 is_current=exp_data.get('is_current', False),
-                                current_ctc=float(exp_data.get('ctc', 0)) if exp_data.get('ctc') else None,  
+                                current_ctc=float(exp_data.get('ctc')) if exp_data.get('ctc') and exp_data.get('ctc').strip() else None,  
                                 location=exp_data.get('location', ''),
                                 description=exp_data.get('description', ''),
                             )
@@ -389,12 +389,11 @@ def update_candidate_profile(request):
                     work_exp = WorkExperience.objects.create(
                         candidate=candidate,
                         company_name=exp_data.get('company_name', ''),
-                        role_title=exp_data.get('job_role', ''),
+                        role_title=exp_data.get('role_title', ''),
                         start_date=f"{exp_data.get('start_year')}-{_month_to_number(exp_data.get('start_month'))}-01",
                         end_date=f"{exp_data.get('end_year')}-{_month_to_number(exp_data.get('end_month'))}-01" if not exp_data.get('is_current') and exp_data.get('end_year') else None,
                         is_current=exp_data.get('is_current', False),
-                        current_ctc=float(exp_data.get('ctc', 0)) if exp_data.get('ctc') else None, 
-                        location=exp_data.get('location', ''),
+                        current_ctc=float(exp_data.get('ctc')) if exp_data.get('ctc') and exp_data.get('ctc').strip() else None,                        location=exp_data.get('location', ''),
                         description=exp_data.get('description', ''),
                     )
                     
