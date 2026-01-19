@@ -21,7 +21,7 @@ class DashboardContent(models.Model):
     # Main heading
     main_heading = models.CharField(
         max_length=200,
-        default="Ready to take the\nnext step?",
+        default="Ready to take the\\nnext step?",
         help_text="Main heading text (use \\n for line breaks)"
     )
     

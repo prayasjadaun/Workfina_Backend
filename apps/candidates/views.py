@@ -703,15 +703,23 @@ def get_filter_options(request):
 @permission_classes([IsAuthenticated])
 def get_filter_categories(request):
     """Get all filter categories with subcategories and candidate counts"""
-    
+
     if request.user.role != 'hr':
         return Response({
             'error': 'Only HR users can access this'
         }, status=status.HTTP_403_FORBIDDEN)
-    
+
     from .models import FilterCategory, FilterOption
-    
+    from django.core.paginator import Paginator
+
+    page = int(request.query_params.get('page', 1))
+    page_size = int(request.query_params.get('page_size', 20))
+    subcategory_page = int(request.query_params.get('subcategory_page', 1))
+    subcategory_limit = int(request.query_params.get('subcategory_limit', 10))
+
     categories = FilterCategory.objects.filter(is_active=True).order_by('display_order', 'name')
+    paginator = Paginator(categories, page_size)
+    categories_page = paginator.get_page(page)
     
     field_mapping = {
         'department': 'role',
@@ -724,10 +732,10 @@ def get_filter_categories(request):
     unlocked_ids = set(UnlockHistory.objects.filter(
         hr_user=request.user.hr_profile
     ).values_list('candidate_id', flat=True))
-    
+
     results = []
-    
-    for category in categories:
+
+    for category in categories_page:
         icon_url = None
         if category.icon:
             icon_url = request.build_absolute_uri(category.icon.url)
@@ -736,19 +744,23 @@ def get_filter_categories(request):
         
         if category.slug in ['state', 'city']:
             options = FilterOption.objects.filter(
-                category=category, 
+                category=category,
                 is_active=True
             ).order_by('display_order', 'name')
         else:
             options = FilterOption.objects.filter(
-                category=category, 
-                is_active=True, 
+                category=category,
+                is_active=True,
                 parent__isnull=True
             ).order_by('display_order', 'name')
-        
+
+        # Paginate subcategories
+        subcategory_paginator = Paginator(options, subcategory_limit)
+        subcategory_page_obj = subcategory_paginator.get_page(subcategory_page)
+
         subcategories = []
-        
-        for option in options:
+
+        for option in subcategory_page_obj:
             if field_name:
                 total_count = Candidate.objects.filter(
                     is_active=True,
@@ -808,6 +820,16 @@ def get_filter_categories(request):
                 'children': child_subcategories
             })
         
+        # Build subcategory pagination URLs
+        subcategory_next = None
+        subcategory_previous = None
+
+        if subcategory_page_obj.has_next():
+            subcategory_next = f"/api/candidates/filter-categories/?page={page}&page_size={page_size}&subcategory_page={subcategory_page_obj.next_page_number()}&subcategory_limit={subcategory_limit}"
+
+        if subcategory_page_obj.has_previous():
+            subcategory_previous = f"/api/candidates/filter-categories/?page={page}&page_size={page_size}&subcategory_page={subcategory_page_obj.previous_page_number()}&subcategory_limit={subcategory_limit}"
+
         results.append({
             'id': str(category.id),
             'name': category.name,
@@ -818,11 +840,26 @@ def get_filter_categories(request):
             'bento_grid': category.bento_grid,
             'dashboard_display': category.dashboard_display,
             'inner_filter': category.inner_filter,
-            'subcategories': subcategories
+            'subcategories': subcategories,
+            'subcategory_count': subcategory_paginator.count,
+            'subcategory_next': subcategory_next,
+            'subcategory_previous': subcategory_previous
         })
-    
+
+    next_url = None
+    previous_url = None
+
+    if categories_page.has_next():
+        next_url = f"/api/candidates/filter-categories/?page={categories_page.next_page_number()}&page_size={page_size}"
+
+    if categories_page.has_previous():
+        previous_url = f"/api/candidates/filter-categories/?page={categories_page.previous_page_number()}&page_size={page_size}"
+
     return Response({
         'success': True,
+        'count': paginator.count,
+        'next': next_url,
+        'previous': previous_url,
         'filter_categories': results
     })
 
