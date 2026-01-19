@@ -230,19 +230,23 @@ def unlock_candidate(request, candidate_id):
         try:
             wallet = Wallet.objects.get(hr_profile__user=request.user)
             credits_required = 10
-            
-            if wallet.balance < credits_required:
+
+            # Check if user can unlock (checks subscription + wallet)
+            if not wallet.can_unlock(credits_required):
                 return Response({
                     'error': f'Insufficient credits. You need {credits_required} credits but have {wallet.balance}.',
                     'required_credits': credits_required,
                     'current_balance': wallet.balance
                 }, status=status.HTTP_400_BAD_REQUEST)
-            
-            # Deduct credits
+
+            # Deduct credits (handles subscription + wallet automatically)
             old_balance = wallet.balance
-            wallet.balance -= credits_required
-            wallet.total_spent += credits_required
-            wallet.save()
+            if not wallet.deduct_credits(credits_required):
+                return Response({
+                    'error': 'Failed to deduct credits. Please try again.',
+                    'required_credits': credits_required,
+                    'current_balance': wallet.balance
+                }, status=status.HTTP_400_BAD_REQUEST)
             
             # Create unlock history
             UnlockHistory.objects.create(

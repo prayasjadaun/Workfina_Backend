@@ -52,6 +52,7 @@ INSTALLED_APPS = [
     'apps.candidates',
     'apps.recruiters',
     'apps.wallet',
+    'apps.subscriptions',
     'django_filters',
     'apps.api_logs',
     'apps.banners',
@@ -73,6 +74,7 @@ MIDDLEWARE = [
     'apps.api_logs.middleware.APILoggingMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'apps.subscriptions.middleware.SubscriptionCheckMiddleware',
 ]
 
 ROOT_URLCONF = 'server.urls'
@@ -184,6 +186,7 @@ JAZZMIN_SETTINGS = {
         "notifications": "fas fa-bell",
         "recruiters": "fas fa-building",
         "wallet": "fas fa-wallet",
+        "subscriptions": "fas fa-crown",
         "authentication": "fas fa-user-shield",
         "token_blacklist": "fas fa-ban",
 
@@ -210,6 +213,12 @@ JAZZMIN_SETTINGS = {
         # 🔹 WALLET
         "wallet.Wallet": "fas fa-wallet",
         "wallet.WalletTransaction": "fas fa-receipt",
+
+        # 🔹 SUBSCRIPTIONS
+        "subscriptions.SubscriptionPlan": "fas fa-tags",
+        "subscriptions.CompanySubscription": "fas fa-calendar-check",
+        "subscriptions.SubscriptionNotification": "fas fa-envelope-open-text",
+        "subscriptions.SubscriptionHistory": "fas fa-history",
 
         # 🔹 AUTH
         "auth.User": "fas fa-users",

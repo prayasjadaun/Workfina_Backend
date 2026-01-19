@@ -32,6 +32,7 @@ urlpatterns = [
     path('api/app-version/', include('apps.app_version.urls')),
     path('api/content/', include('apps.content.urls')),
 
+    path('api/subscriptions/', include('apps.subscriptions.urls')),
 
     path('swagger/', schema_view.with_ui('swagger', cache_timeout=0), name='swagger-ui'),
     path('redoc/', schema_view.with_ui('redoc', cache_timeout=0), name='redoc'),

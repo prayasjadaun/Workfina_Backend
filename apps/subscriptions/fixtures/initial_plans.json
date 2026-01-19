@@ -1,0 +1,74 @@
+[
+  {
+    "model": "subscriptions.subscriptionplan",
+    "fields": {
+      "name": "Unlimited Monthly Plan",
+      "description": "Perfect for small to medium companies. Get unlimited candidate unlocks for one month.",
+      "plan_type": "MONTHLY",
+      "price": "20000.00",
+      "is_unlimited": true,
+      "credits_limit": null,
+      "is_active": true
+    }
+  },
+  {
+    "model": "subscriptions.subscriptionplan",
+    "fields": {
+      "name": "Unlimited Quarterly Plan",
+      "description": "Best value! Get unlimited candidate unlocks for 3 months with 25% savings.",
+      "plan_type": "QUARTERLY",
+      "price": "45000.00",
+      "is_unlimited": true,
+      "credits_limit": null,
+      "is_active": true
+    }
+  },
+  {
+    "model": "subscriptions.subscriptionplan",
+    "fields": {
+      "name": "Unlimited Half Yearly Plan",
+      "description": "Maximum savings! Get unlimited candidate unlocks for 6 months with 50% savings.",
+      "plan_type": "HALF_YEARLY",
+      "price": "60000.00",
+      "is_unlimited": true,
+      "credits_limit": null,
+      "is_active": true
+    }
+  },
+  {
+    "model": "subscriptions.subscriptionplan",
+    "fields": {
+      "name": "Unlimited Yearly Plan",
+      "description": "Enterprise plan! Get unlimited candidate unlocks for a full year with maximum savings.",
+      "plan_type": "YEARLY",
+      "price": "100000.00",
+      "is_unlimited": true,
+      "credits_limit": null,
+      "is_active": true
+    }
+  },
+  {
+    "model": "subscriptions.subscriptionplan",
+    "fields": {
+      "name": "Starter Monthly - 50 Credits",
+      "description": "Perfect for startups. Get 50 candidate unlocks per month.",
+      "plan_type": "MONTHLY",
+      "price": "5000.00",
+      "is_unlimited": false,
+      "credits_limit": 50,
+      "is_active": true
+    }
+  },
+  {
+    "model": "subscriptions.subscriptionplan",
+    "fields": {
+      "name": "Professional Monthly - 150 Credits",
+      "description": "For growing companies. Get 150 candidate unlocks per month.",
+      "plan_type": "MONTHLY",
+      "price": "12000.00",
+      "is_unlimited": false,
+      "credits_limit": 150,
+      "is_active": true
+    }
+  }
+]

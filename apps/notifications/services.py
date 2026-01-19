@@ -43,13 +43,16 @@ class WorkfinaFCMService:
                 **notification.data_payload
             }
             
-            # Send via SimpleFCM
+            # Send via SimpleFCM with sound enabled
+            logger.info(f"Sending notification with sound enabled to {notification.user.email}")
             result = SimpleFCM.send_to_token(
                 token=notification.user.fcm_token,
                 title=notification.title,
                 body=notification.body,
-                data=data_payload
+                data=data_payload,
+                play_sound=True
             )
+            logger.info(f"FCM result: {result}")
             
             if result.get('success_count', 0) > 0:
                 notification.status = 'SENT'

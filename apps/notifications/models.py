@@ -19,6 +19,10 @@ class NotificationTemplate(models.Model):
         ('CANDIDATE_REGISTERED', 'Candidate Registered'),
         ('FOLLOWUP_REMINDER', 'Follow-up Reminder'),
         ('AVAILABILITY_REMINDER', 'Availability Reminder'),
+        ('SUBSCRIPTION_ACTIVATED', 'Subscription Activated'),
+        ('SUBSCRIPTION_EXPIRING', 'Subscription Expiring Soon'),
+        ('SUBSCRIPTION_EXPIRED', 'Subscription Expired'),
+        ('SUBSCRIPTION_CANCELLED', 'Subscription Cancelled'),
     ]
     
     RECIPIENT_TYPES = [
