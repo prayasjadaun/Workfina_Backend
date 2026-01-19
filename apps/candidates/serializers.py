@@ -241,7 +241,8 @@ class FullCandidateSerializer(serializers.ModelSerializer):
             'languages', 'street_address', 'willing_to_relocate', 'career_objective',
             'work_experiences', 'educations','profile_step', 'is_profile_completed',
             'joining_availability', 'notice_period_details',
-            'is_available_for_hiring', 'last_availability_update'
+            'is_available_for_hiring', 'last_availability_update',
+            'has_agreed_to_declaration', 'declaration_agreed_at'
         ]
     
     def get_skills_list(self, obj):

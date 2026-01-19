@@ -1336,6 +1336,10 @@ def save_candidate_step(request):
             reminder.is_profile_completed = True
             reminder.save()
 
+        has_agreed = request.data.get('has_agreed_to_declaration')
+        if has_agreed == 'true' or has_agreed is True:
+            update_data['has_agreed_to_declaration'] = True
+            update_data['declaration_agreed_at'] = timezone.now()
             # Mark step 4 as completed
             if not candidate.step4_completed:
                 update_data['step4_completed'] = True
