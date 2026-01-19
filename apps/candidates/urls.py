@@ -23,6 +23,7 @@ urlpatterns = [
     path('locations/cities/', get_cities, name='get-cities'),
     path('save-step/', save_candidate_step, name='save-candidate-step'),
     path('public/filter-options/', get_public_filter_options, name='public-filter-options'),
+    
 
 
     

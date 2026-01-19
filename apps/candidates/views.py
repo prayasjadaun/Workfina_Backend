@@ -1607,3 +1607,6 @@ def update_candidate_hiring_status(request, candidate_id):
         return Response({
             'error': 'Candidate not found'
         }, status=404)        
+    
+
+

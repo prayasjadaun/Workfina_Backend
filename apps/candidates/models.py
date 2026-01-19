@@ -247,3 +247,6 @@ def generate_masked_name(sender, instance, **kwargs):
             else:
                 masked.append('*')
         instance.masked_name = ' '.join(masked)
+
+        # In models.py (you can create a new app or add to an existing one)
+
