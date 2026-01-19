@@ -205,3 +205,4 @@ class EducationAdmin(admin.ModelAdmin):
     list_filter = ['is_ongoing', 'start_year']
     search_fields = ['candidate__masked_name', 'institution_name', 'degree']
     raw_id_fields = ['candidate']
+
