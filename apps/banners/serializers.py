@@ -18,7 +18,12 @@ class RecruiterBannerSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = RecruiterBanner
-        fields = ['id', 'heading', 'subheading', 'image', 'height']
+        fields = [
+            'id', 'heading', 'subheading', 'image', 'height',
+            'heading_font_size', 'heading_color', 'heading_font_weight',
+            'subheading_font_size', 'subheading_color', 'subheading_font_weight',
+            'text_align'
+        ]
 
     def get_image(self, obj):
         request = self.context.get('request')
