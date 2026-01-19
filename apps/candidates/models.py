@@ -69,6 +69,8 @@ class Candidate(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='candidate_profile')
     profile_step = models.PositiveIntegerField(default=1)
     is_profile_completed = models.BooleanField(default=False)
+    has_agreed_to_declaration = models.BooleanField(default=False, help_text="Candidate agreed to declaration")
+    declaration_agreed_at = models.DateTimeField(null=True, blank=True, help_text="When candidate agreed to declaration")
 
     # Step completion tracking
     step1_completed = models.BooleanField(default=False, help_text="Basic information filled")

@@ -67,7 +67,7 @@ class CandidateAdmin(admin.ModelAdmin):
     list_display = ['user', 'masked_name','first_name', 'last_name', 'role', 'experience_years', 'city', 'age', 'is_active', 'is_available_for_hiring']
     list_filter = ['role__category', 'religion', 'state', 'is_active', 'is_available_for_hiring', 'experience_years','joining_availability']
     search_fields = ['first_name', 'last_name', 'masked_name', 'user__email', 'skills','notice_period_details']
-    readonly_fields = ['masked_name', 'created_at', 'updated_at', 'last_availability_update']
+    readonly_fields = ['masked_name', 'created_at', 'updated_at', 'last_availability_update','declaration_agreed_at']
     raw_id_fields = ['user']
     inlines = [WorkExperienceInline, EducationInline]
     
@@ -94,7 +94,7 @@ class CandidateAdmin(admin.ModelAdmin):
             'fields': ('resume', 'video_intro', 'profile_image')
         }),
         ('Status', {
-            'fields': ('is_active', 'is_available_for_hiring', 'last_availability_update', 'created_at', 'updated_at')
+            'fields': ('is_active', 'is_available_for_hiring', 'last_availability_update','has_agreed_to_declaration', 'declaration_agreed_at', 'created_at', 'updated_at')
         })
     )
 
