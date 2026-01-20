@@ -147,6 +147,7 @@ STATIC_ROOT = BASE_DIR / 'staticfiles'
 
 FILE_UPLOAD_MAX_MEMORY_SIZE = 52428800  # 50MB
 DATA_UPLOAD_MAX_MEMORY_SIZE = 52428800  # 50MB
+DATA_UPLOAD_MAX_NUMBER_FIELDS = 10000  # Increased from default 1000 to handle large filter categories
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field

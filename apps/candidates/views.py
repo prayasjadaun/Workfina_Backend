@@ -715,7 +715,7 @@ def get_filter_categories(request):
     page = int(request.query_params.get('page', 1))
     page_size = int(request.query_params.get('page_size', 20))
     subcategory_page = int(request.query_params.get('subcategory_page', 1))
-    subcategory_limit = int(request.query_params.get('subcategory_limit', 10))
+    subcategory_limit = int(request.query_params.get('subcategory_limit', 20))
 
     categories = FilterCategory.objects.filter(is_active=True).order_by('display_order', 'name')
     paginator = Paginator(categories, page_size)
@@ -801,19 +801,31 @@ def get_filter_categories(request):
                 else:
                     child_total = child_unlocked = child_locked = 0
                 
+                # Get icon URL for child subcategory
+                child_icon_url = None
+                if child.icon:
+                    child_icon_url = request.build_absolute_uri(child.icon.url)
+
                 child_subcategories.append({
                     'id': str(child.id),
                     'name': child.name,
                     'slug': child.slug,
+                    'icon': child_icon_url,
                     'total_candidates': child_total,
                     'locked_candidates': child_locked,
                     'unlocked_candidates': child_unlocked
                 })
             
+            # Get icon URL for subcategory
+            option_icon_url = None
+            if option.icon:
+                option_icon_url = request.build_absolute_uri(option.icon.url)
+
             subcategories.append({
                 'id': str(option.id),
                 'name': option.name,
                 'slug': option.slug,
+                'icon': option_icon_url,
                 'total_candidates': total_count,
                 'locked_candidates': locked_count,
                 'unlocked_candidates': unlocked_count,

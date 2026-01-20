@@ -51,6 +51,7 @@ class FilterOption(models.Model):
     name = models.CharField(max_length=255)
     slug = models.SlugField(max_length=255)
     parent = models.ForeignKey('self', on_delete=models.CASCADE, null=True, blank=True, related_name='children')
+    icon = models.FileField(upload_to='filter_option_icons/', blank=True, null=True, validators=[validate_icon_file])
     display_order = models.PositiveIntegerField(default=0)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)

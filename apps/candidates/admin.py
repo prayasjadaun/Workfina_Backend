@@ -15,16 +15,23 @@ class EducationInline(admin.TabularInline):
 class FilterOptionInline(admin.TabularInline):
     model = FilterOption
     extra = 1
-    fields = ['name', 'slug', 'parent', 'display_order', 'is_active']
+    fields = ['name', 'slug', 'parent', 'icon', 'display_order', 'is_active']
+    can_delete = True
+    max_num = 100  # Limit to 100 items for performance
 
 @admin.register(FilterCategory)
 class FilterCategoryAdmin(admin.ModelAdmin):
-    list_display = ['name', 'slug', 'display_order', 'is_active', 'created_at']
+    list_display = ['name', 'slug', 'display_order', 'is_active', 'option_count', 'created_at']
     list_filter = ['is_active']
     search_fields = ['name']
     prepopulated_fields = {'slug': ('name',)}
     inlines = [FilterOptionInline]
     ordering = ['display_order', 'name']
+
+    def option_count(self, obj):
+        return obj.options.count()
+    option_count.short_description = 'Number of Options'
+
 
 class CandidateAdminForm(forms.ModelForm):
     class Meta:
