@@ -37,7 +37,6 @@ ALLOWED_HOSTS = ['localhost', '127.0.0.1', '192.168.1.3', '*']
 # Application definition
 
 INSTALLED_APPS = [
-    'jazzmin',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -163,6 +162,7 @@ REST_FRAMEWORK = {
         'rest_framework.permissions.IsAuthenticated',
     ],
 }
+
 SWAGGER_SETTINGS = {
     'SECURITY_DEFINITIONS': {
         'Bearer': {
@@ -174,67 +174,6 @@ SWAGGER_SETTINGS = {
     },
 }
 
-JAZZMIN_SETTINGS = {
-    "site_title": "Workfina Admin",
-    "site_header": "Workfina Admin",
-    "site_brand": "Workfina",
-
-    "icons": {
-        # 🔹 APPS
-        "banners": "fas fa-images",
-        "candidates": "fas fa-user-tie",
-        "notifications": "fas fa-bell",
-        "recruiters": "fas fa-building",
-        "wallet": "fas fa-wallet",
-        "subscriptions": "fas fa-crown",
-        "authentication": "fas fa-user-shield",
-        "token_blacklist": "fas fa-ban",
-
-        # 🔹 BANNERS
-        "banners.Banner": "fas fa-image",
-
-        # 🔹 CANDIDATES
-        "candidates.Candidate": "fas fa-user",
-        "candidates.WorkExperience": "fas fa-briefcase",
-        "candidates.Education": "fas fa-graduation-cap",
-        "candidates.CandidateFollowup": "fas fa-phone",
-        "candidates.CandidateNote": "fas fa-sticky-note",
-
-        # 🔹 NOTIFICATIONS
-        "notifications.CandidateStatus": "fas fa-flag",
-        "notifications.NotificationTemplate": "fas fa-envelope",
-        "notifications.ProfileStepReminder": "fas fa-user-clock",
-        "notifications.StepNotificationDetail": "fas fa-list-check",
-        "notifications.UserNotification": "fas fa-bell",
-
-        # 🔹 RECRUITERS
-        "recruiters.HrProfile": "fas fa-user-tie",
-
-        # 🔹 WALLET
-        "wallet.Wallet": "fas fa-wallet",
-        "wallet.WalletTransaction": "fas fa-receipt",
-
-        # 🔹 SUBSCRIPTIONS
-        "subscriptions.SubscriptionPlan": "fas fa-tags",
-        "subscriptions.CompanySubscription": "fas fa-calendar-check",
-        "subscriptions.SubscriptionNotification": "fas fa-envelope-open-text",
-        "subscriptions.SubscriptionHistory": "fas fa-history",
-
-        # 🔹 AUTH
-        "auth.User": "fas fa-users",
-
-        # 🔹 JWT
-        "token_blacklist.BlacklistedToken": "fas fa-user-slash",
-        "token_blacklist.OutstandingToken": "fas fa-key",
-    },
-}
-
-
-JAZZMIN_UI_TWEAKS = {
-    "sidebar_fixed": True,  
-    "navbar_fixed": True,   
-    "footer_fixed": False,   
-}
 
 
 

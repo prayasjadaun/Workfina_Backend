@@ -106,8 +106,7 @@ class Candidate(models.Model):
     state = models.ForeignKey(FilterOption, on_delete=models.SET_NULL, null=True, blank=True, related_name='state_candidates')
     city = models.ForeignKey(FilterOption, on_delete=models.SET_NULL, null=True, blank=True, related_name='city_candidates')
     
-    # Skills
-    skills = models.TextField()  # Comma-separated skills
+    skills = models.TextField()  
 
     
     # Resume & Documents
