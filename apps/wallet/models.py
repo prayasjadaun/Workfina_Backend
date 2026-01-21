@@ -1,6 +1,42 @@
 from django.db import models
 from apps.recruiters.models import HRProfile
 
+class CreditSettings(models.Model):
+    """Singleton model to store credit pricing and unlock requirements"""
+    price_per_credit = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=10.00,
+        help_text="Price in rupees for 1 credit"
+    )
+    unlock_credits_required = models.PositiveIntegerField(
+        default=10,
+        help_text="Number of credits required to unlock a candidate"
+    )
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Credit Settings"
+        verbose_name_plural = "Credit Settings"
+
+    def save(self, *args, **kwargs):
+        # Ensure only one instance exists
+        self.pk = 1
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        # Prevent deletion
+        pass
+
+    @classmethod
+    def get_settings(cls):
+        """Get or create the singleton settings instance"""
+        obj, created = cls.objects.get_or_create(pk=1)
+        return obj
+
+    def __str__(self):
+        return f"1 Credit = ₹{self.price_per_credit} | Unlock = {self.unlock_credits_required} credits"
+
 class Wallet(models.Model):
     hr_profile = models.OneToOneField(HRProfile, on_delete=models.CASCADE)
     balance = models.PositiveIntegerField(default=0)

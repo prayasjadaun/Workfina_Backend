@@ -250,5 +250,117 @@ def generate_masked_name(sender, instance, **kwargs):
                 masked.append('*')
         instance.masked_name = ' '.join(masked)
 
+
+class HiringAvailabilityUI(models.Model):
+    """Dynamic UI Configuration for Hiring Availability Screen"""
+
+    # Meta Information
+    name = models.CharField(max_length=100, unique=True, help_text="Configuration name for admin reference")
+    is_active = models.BooleanField(default=True, help_text="Only one configuration can be active at a time")
+
+    # Content Fields
+    title = models.CharField(max_length=200, default="Are you still available for hiring?")
+    message = models.TextField(default="Please confirm if you're still open to new job opportunities.")
+
+    # Layout Configuration
+    LAYOUT_CHOICES = [
+        ('column', 'Column (Vertical Stack)'),
+        ('row', 'Row (Horizontal)'),
+    ]
+    button_layout = models.CharField(max_length=10, choices=LAYOUT_CHOICES, default='column')
+
+    # Background Configuration
+    BACKGROUND_TYPE_CHOICES = [
+        ('color', 'Solid Color'),
+        ('image', 'Image'),
+        ('gradient', 'Gradient'),
+    ]
+    background_type = models.CharField(max_length=10, choices=BACKGROUND_TYPE_CHOICES, default='color')
+    background_color = models.CharField(max_length=7, default='#FFFFFF', help_text="Hex color code (e.g., #FFFFFF)")
+    background_image = models.ImageField(upload_to='hiring_availability_bg/', null=True, blank=True)
+    gradient_start_color = models.CharField(max_length=7, default='#FFFFFF', help_text="Gradient start color")
+    gradient_end_color = models.CharField(max_length=7, default='#F5F5F5', help_text="Gradient end color")
+
+    # Icon Configuration
+    ICON_SOURCE_CHOICES = [
+        ('material', 'Material Icon (Built-in)'),
+        ('upload', 'Upload Custom Icon/Image'),
+    ]
+    icon_source = models.CharField(max_length=10, choices=ICON_SOURCE_CHOICES, default='material', help_text="Choose icon source")
+    icon_type = models.CharField(max_length=50, default='work_outline_rounded', help_text="Material Icon name (only for material source)")
+    icon_image = models.FileField(upload_to='hiring_availability_icons/', null=True, blank=True, validators=[validate_icon_file], help_text="Upload custom icon/image - supports PNG, JPG, JPEG, SVG (only for upload source)")
+    icon_size = models.FloatField(default=60.0, help_text="Icon size in pixels")
+    icon_color = models.CharField(max_length=7, default='#4CAF50', help_text="Icon color hex code (only for material icons)")
+    icon_background_color = models.CharField(max_length=9, default='#4CAF5019', help_text="Icon background with opacity")
+    show_icon = models.BooleanField(default=True)
+
+    # Title Styling
+    title_font_size = models.FloatField(default=24.0)
+    title_font_weight = models.CharField(max_length=20, default='bold',
+                                         choices=[('normal', 'Normal'), ('bold', 'Bold'), ('w600', 'Semi Bold'), ('w700', 'Bold'), ('w800', 'Extra Bold')])
+    title_color = models.CharField(max_length=7, default='#000000')
+    title_alignment = models.CharField(max_length=10, default='center',
+                                       choices=[('left', 'Left'), ('center', 'Center'), ('right', 'Right')])
+
+    # Message Styling
+    message_font_size = models.FloatField(default=16.0)
+    message_font_weight = models.CharField(max_length=20, default='normal',
+                                          choices=[('normal', 'Normal'), ('bold', 'Bold'), ('w500', 'Medium'), ('w600', 'Semi Bold')])
+    message_color = models.CharField(max_length=7, default='#757575')
+    message_alignment = models.CharField(max_length=10, default='center',
+                                        choices=[('left', 'Left'), ('center', 'Center'), ('right', 'Right')])
+
+    # Primary Button (Yes/Available)
+    primary_button_text = models.CharField(max_length=100, default="Yes, I'm Available")
+    primary_button_bg_color = models.CharField(max_length=7, default='#4CAF50')
+    primary_button_text_color = models.CharField(max_length=7, default='#FFFFFF')
+    primary_button_font_size = models.FloatField(default=18.0)
+    primary_button_font_weight = models.CharField(max_length=20, default='w600',
+                                                  choices=[('normal', 'Normal'), ('bold', 'Bold'), ('w500', 'Medium'), ('w600', 'Semi Bold'), ('w700', 'Bold')])
+    primary_button_height = models.FloatField(default=56.0)
+    primary_button_border_radius = models.FloatField(default=12.0)
+
+    # Secondary Button (No/Not Available)
+    secondary_button_text = models.CharField(max_length=100, default="No, Not Available")
+    secondary_button_bg_color = models.CharField(max_length=7, default='#FFFFFF')
+    secondary_button_text_color = models.CharField(max_length=7, default='#616161')
+    secondary_button_border_color = models.CharField(max_length=7, default='#BDBDBD')
+    secondary_button_font_size = models.FloatField(default=18.0)
+    secondary_button_font_weight = models.CharField(max_length=20, default='w600',
+                                                    choices=[('normal', 'Normal'), ('bold', 'Bold'), ('w500', 'Medium'), ('w600', 'Semi Bold'), ('w700', 'Bold')])
+    secondary_button_height = models.FloatField(default=56.0)
+    secondary_button_border_radius = models.FloatField(default=12.0)
+
+    # Spacing Configuration
+    spacing_between_buttons = models.FloatField(default=16.0, help_text="Space between buttons in pixels")
+    content_padding_horizontal = models.FloatField(default=24.0)
+    content_padding_vertical = models.FloatField(default=32.0)
+
+    # Extra Content Sections (JSON field for dynamic content)
+    extra_content = models.JSONField(
+        null=True,
+        blank=True,
+        help_text="Additional content sections in JSON format. Example: [{'type': 'text', 'content': 'Extra info', 'position': 'top'}]"
+    )
+
+    # Timestamps
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Hiring Availability UI Configuration"
+        verbose_name_plural = "Hiring Availability UI Configurations"
+        ordering = ['-is_active', '-updated_at']
+
+    def __str__(self):
+        return f"{self.name} {'(Active)' if self.is_active else ''}"
+
+    def save(self, *args, **kwargs):
+        # Ensure only one configuration is active
+        if self.is_active:
+            HiringAvailabilityUI.objects.filter(is_active=True).exclude(pk=self.pk).update(is_active=False)
+        super().save(*args, **kwargs)
+
+
         # In models.py (you can create a new app or add to an existing one)
 

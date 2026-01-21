@@ -1451,7 +1451,7 @@ def get_public_filter_options(request):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def get_candidate_availability(request):
-    """Get candidate's current availability status for hiring with message from admin"""
+    """Get candidate's current availability status for hiring with dynamic UI configuration"""
 
     if request.user.role != 'candidate':
         return Response({
@@ -1476,20 +1476,128 @@ def get_candidate_availability(request):
             # Show prompt only if current date is different from last update date
             should_show_prompt = current_date != last_update_date
 
-        # Get message from NotificationTemplate (admin can change this)
-        from apps.notifications.models import NotificationTemplate
-        template = NotificationTemplate.objects.filter(
-            notification_type='AVAILABILITY_REMINDER',
-            recipient_type__in=['ALL', 'CANDIDATE'],
-            is_active=True
-        ).first()
+        # Get dynamic UI configuration from HiringAvailabilityUI model
+        from apps.candidates.models import HiringAvailabilityUI
+        ui_config = HiringAvailabilityUI.objects.filter(is_active=True).first()
 
-        if template:
-            title = template.title
-            message = template.body
+        # Default UI configuration
+        default_config = {
+            'title': "Are you still available for hiring?",
+            'message': "Please confirm if you're still open to new job opportunities.",
+            'button_layout': 'column',
+            'background_type': 'color',
+            'background_color': '#FFFFFF',
+            'background_image': None,
+            'gradient_start_color': '#FFFFFF',
+            'gradient_end_color': '#F5F5F5',
+            'icon': {
+                'show': True,
+                'source': 'material',
+                'type': 'work_outline_rounded',
+                'image_url': None,
+                'size': 60.0,
+                'color': '#4CAF50',
+                'background_color': '#4CAF5019'
+            },
+            'title_style': {
+                'font_size': 24.0,
+                'font_weight': 'bold',
+                'color': '#000000',
+                'alignment': 'center'
+            },
+            'message_style': {
+                'font_size': 16.0,
+                'font_weight': 'normal',
+                'color': '#757575',
+                'alignment': 'center'
+            },
+            'primary_button': {
+                'text': "Yes, I'm Available",
+                'bg_color': '#4CAF50',
+                'text_color': '#FFFFFF',
+                'font_size': 18.0,
+                'font_weight': 'w600',
+                'height': 56.0,
+                'border_radius': 12.0
+            },
+            'secondary_button': {
+                'text': "No, Not Available",
+                'bg_color': '#FFFFFF',
+                'text_color': '#616161',
+                'border_color': '#BDBDBD',
+                'font_size': 18.0,
+                'font_weight': 'w600',
+                'height': 56.0,
+                'border_radius': 12.0
+            },
+            'spacing': {
+                'between_buttons': 16.0,
+                'padding_horizontal': 24.0,
+                'padding_vertical': 32.0
+            },
+            'extra_content': []
+        }
+
+        # If UI config exists, use it
+        if ui_config:
+            config_data = {
+                'title': ui_config.title,
+                'message': ui_config.message,
+                'button_layout': ui_config.button_layout,
+                'background_type': ui_config.background_type,
+                'background_color': ui_config.background_color,
+                'background_image': request.build_absolute_uri(ui_config.background_image.url) if ui_config.background_image else None,
+                'gradient_start_color': ui_config.gradient_start_color,
+                'gradient_end_color': ui_config.gradient_end_color,
+                'icon': {
+                    'show': ui_config.show_icon,
+                    'source': ui_config.icon_source,
+                    'type': ui_config.icon_type,
+                    'image_url': request.build_absolute_uri(ui_config.icon_image.url) if ui_config.icon_image else None,
+                    'size': ui_config.icon_size,
+                    'color': ui_config.icon_color,
+                    'background_color': ui_config.icon_background_color
+                },
+                'title_style': {
+                    'font_size': ui_config.title_font_size,
+                    'font_weight': ui_config.title_font_weight,
+                    'color': ui_config.title_color,
+                    'alignment': ui_config.title_alignment
+                },
+                'message_style': {
+                    'font_size': ui_config.message_font_size,
+                    'font_weight': ui_config.message_font_weight,
+                    'color': ui_config.message_color,
+                    'alignment': ui_config.message_alignment
+                },
+                'primary_button': {
+                    'text': ui_config.primary_button_text,
+                    'bg_color': ui_config.primary_button_bg_color,
+                    'text_color': ui_config.primary_button_text_color,
+                    'font_size': ui_config.primary_button_font_size,
+                    'font_weight': ui_config.primary_button_font_weight,
+                    'height': ui_config.primary_button_height,
+                    'border_radius': ui_config.primary_button_border_radius
+                },
+                'secondary_button': {
+                    'text': ui_config.secondary_button_text,
+                    'bg_color': ui_config.secondary_button_bg_color,
+                    'text_color': ui_config.secondary_button_text_color,
+                    'border_color': ui_config.secondary_button_border_color,
+                    'font_size': ui_config.secondary_button_font_size,
+                    'font_weight': ui_config.secondary_button_font_weight,
+                    'height': ui_config.secondary_button_height,
+                    'border_radius': ui_config.secondary_button_border_radius
+                },
+                'spacing': {
+                    'between_buttons': ui_config.spacing_between_buttons,
+                    'padding_horizontal': ui_config.content_padding_horizontal,
+                    'padding_vertical': ui_config.content_padding_vertical
+                },
+                'extra_content': ui_config.extra_content if ui_config.extra_content else []
+            }
         else:
-            title = "Are you still available for hiring?"
-            message = "Please confirm if you're still open to new job opportunities."
+            config_data = default_config
 
         # Format last_availability_update to IST
         last_update_ist = None
@@ -1503,8 +1611,7 @@ def get_candidate_availability(request):
             'is_available_for_hiring': candidate.is_available_for_hiring,
             'last_availability_update': last_update_ist,
             'should_show_prompt': should_show_prompt,
-            'title': title,
-            'message': message
+            'ui_config': config_data
         })
     except Candidate.DoesNotExist:
         return Response({

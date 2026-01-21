@@ -1,9 +1,9 @@
 from rest_framework import status, generics
 from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
-from .models import Wallet, WalletTransaction
-from .serializers import WalletSerializer, WalletTransactionSerializer, RechargeWalletSerializer
+from .models import Wallet, WalletTransaction, CreditSettings
+from .serializers import WalletSerializer, WalletTransactionSerializer, RechargeWalletSerializer, CreditSettingsSerializer
 from apps.recruiters.models import HRProfile
 
 @api_view(['GET'])
@@ -64,7 +64,7 @@ def recharge_wallet(request):
 class TransactionHistoryView(generics.ListAPIView):
     serializer_class = WalletTransactionSerializer
     permission_classes = [IsAuthenticated]
-    
+
     def get_queryset(self):
         try:
             hr_profile = self.request.user.hr_profile
@@ -72,7 +72,7 @@ class TransactionHistoryView(generics.ListAPIView):
             return WalletTransaction.objects.filter(wallet=wallet)
         except (HRProfile.DoesNotExist, Wallet.DoesNotExist):
             return WalletTransaction.objects.none()
-    
+
     def list(self, request, *args, **kwargs):
         try:
             queryset = self.get_queryset()
@@ -85,3 +85,17 @@ class TransactionHistoryView(generics.ListAPIView):
             return Response({
                 'error': 'Failed to fetch transactions'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def get_credit_settings(request):
+    """
+    Get credit pricing and unlock requirements
+    Public endpoint - no authentication required
+    """
+    settings = CreditSettings.get_settings()
+    serializer = CreditSettingsSerializer(settings)
+    return Response({
+        'success': True,
+        'settings': serializer.data
+    })

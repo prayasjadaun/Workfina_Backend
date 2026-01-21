@@ -213,3 +213,84 @@ class EducationAdmin(admin.ModelAdmin):
     search_fields = ['candidate__masked_name', 'institution_name', 'degree']
     raw_id_fields = ['candidate']
 
+
+@admin.register(HiringAvailabilityUI)
+class HiringAvailabilityUIAdmin(admin.ModelAdmin):
+    list_display = ['name', 'is_active', 'button_layout', 'background_type', 'updated_at']
+    list_filter = ['is_active', 'button_layout', 'background_type']
+    search_fields = ['name', 'title', 'message']
+    readonly_fields = ['created_at', 'updated_at']
+
+    fieldsets = (
+        ('Configuration Info', {
+            'fields': ('name', 'is_active')
+        }),
+        ('Content', {
+            'fields': ('title', 'message'),
+            'description': 'Main title and message text shown to candidates'
+        }),
+        ('Layout', {
+            'fields': ('button_layout',),
+            'description': 'Choose how buttons are arranged (column/row)'
+        }),
+        ('Background Settings', {
+            'fields': ('background_type', 'background_color', 'background_image', 'gradient_start_color', 'gradient_end_color'),
+            'description': 'Background can be solid color, image, or gradient'
+        }),
+        ('Icon Configuration', {
+            'fields': ('show_icon', 'icon_source', 'icon_type', 'icon_image', 'icon_size', 'icon_color', 'icon_background_color'),
+            'description': 'Icon displayed at the top of the screen. Choose Material Icon (built-in) or Upload custom icon/image'
+        }),
+        ('Title Styling', {
+            'fields': ('title_font_size', 'title_font_weight', 'title_color', 'title_alignment'),
+            'description': 'Customize title appearance'
+        }),
+        ('Message Styling', {
+            'fields': ('message_font_size', 'message_font_weight', 'message_color', 'message_alignment'),
+            'description': 'Customize message appearance'
+        }),
+        ('Primary Button (Yes/Available)', {
+            'fields': (
+                'primary_button_text',
+                'primary_button_bg_color',
+                'primary_button_text_color',
+                'primary_button_font_size',
+                'primary_button_font_weight',
+                'primary_button_height',
+                'primary_button_border_radius'
+            ),
+            'description': 'Customize the "Yes, I\'m Available" button'
+        }),
+        ('Secondary Button (No/Not Available)', {
+            'fields': (
+                'secondary_button_text',
+                'secondary_button_bg_color',
+                'secondary_button_text_color',
+                'secondary_button_border_color',
+                'secondary_button_font_size',
+                'secondary_button_font_weight',
+                'secondary_button_height',
+                'secondary_button_border_radius'
+            ),
+            'description': 'Customize the "No, Not Available" button'
+        }),
+        ('Spacing & Padding', {
+            'fields': ('spacing_between_buttons', 'content_padding_horizontal', 'content_padding_vertical'),
+            'description': 'Control spacing between elements'
+        }),
+        ('Extra Content (Advanced)', {
+            'fields': ('extra_content',),
+            'description': 'Add dynamic extra content sections in JSON format. Example: [{"type": "text", "content": "Extra information", "position": "top", "font_size": 14, "color": "#666666"}]'
+        }),
+        ('Timestamps', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        })
+    )
+
+    def save_model(self, request, obj, form, change):
+        # Ensure only one configuration is active
+        if obj.is_active:
+            HiringAvailabilityUI.objects.filter(is_active=True).exclude(pk=obj.pk).update(is_active=False)
+        super().save_model(request, obj, form, change)
+

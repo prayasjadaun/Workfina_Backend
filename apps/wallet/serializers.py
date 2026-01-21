@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Wallet, WalletTransaction
+from .models import Wallet, WalletTransaction, CreditSettings
 from django.utils import timezone
 
 
@@ -29,3 +29,8 @@ class WalletTransactionSerializer(serializers.ModelSerializer):
 class RechargeWalletSerializer(serializers.Serializer):
     credits = serializers.IntegerField(min_value=1)
     payment_reference = serializers.CharField(max_length=100, required=False)
+
+class CreditSettingsSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CreditSettings
+        fields = ['price_per_credit', 'unlock_credits_required']

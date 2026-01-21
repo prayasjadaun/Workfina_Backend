@@ -14,8 +14,8 @@ class ActiveBannerView(APIView):
 
 class ActiveRecruiterBannerView(APIView):
     def get(self, request):
-        banner = RecruiterBanner.objects.filter(is_active=True).first()
-        if not banner:
-            return Response(None)
-        serializer = RecruiterBannerSerializer(banner, context={'request': request})
+        banners = RecruiterBanner.objects.filter(is_active=True)
+        if not banners.exists():
+            return Response([])
+        serializer = RecruiterBannerSerializer(banners, many=True, context={'request': request})
         return Response(serializer.data)
