@@ -269,6 +269,18 @@ class HiringAvailabilityUI(models.Model):
     ]
     button_layout = models.CharField(max_length=10, choices=LAYOUT_CHOICES, default='column')
 
+    VERTICAL_ALIGNMENT_CHOICES = [
+        ('top', 'Top - Content starts from top'),
+        ('center', 'Center - Content centered vertically'),
+        ('bottom', 'Bottom - Content aligned to bottom'),
+    ]
+    content_vertical_alignment = models.CharField(
+        max_length=10,
+        choices=VERTICAL_ALIGNMENT_CHOICES,
+        default='center',
+        help_text="Vertical position of all content in the screen"
+    )
+
     # Background Configuration
     BACKGROUND_TYPE_CHOICES = [
         ('color', 'Solid Color'),

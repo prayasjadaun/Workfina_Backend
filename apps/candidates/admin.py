@@ -230,8 +230,8 @@ class HiringAvailabilityUIAdmin(admin.ModelAdmin):
             'description': 'Main title and message text shown to candidates'
         }),
         ('Layout', {
-            'fields': ('button_layout',),
-            'description': 'Choose how buttons are arranged (column/row)'
+            'fields': ('button_layout', 'content_vertical_alignment'),
+            'description': 'Choose how buttons are arranged (column/row) and vertical position of content (top/center/bottom)'
         }),
         ('Background Settings', {
             'fields': ('background_type', 'background_color', 'background_image', 'gradient_start_color', 'gradient_end_color'),
