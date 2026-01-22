@@ -106,18 +106,47 @@ class CandidateRegistrationSerializer(serializers.ModelSerializer):
             defaults={'name': 'City', 'display_order': 5}
         )
 
-        role_name = data.get('role')
-        if role_name and not isinstance(role_name, FilterOption):
-            role_slug = role_name.lower().replace(' ', '-')
-            try:
+        # role_name = data.get('role')
+        # if role_name and not isinstance(role_name, FilterOption):
+        #     role_slug = role_name.lower().replace(' ', '-')
+        #     try:
+        #         data['role'] = FilterOption.objects.get(category=dept_category, slug=role_slug)
+        #     except FilterOption.DoesNotExist:
+        #         data['role'] = FilterOption.objects.create(
+        #             category=dept_category,
+        #             slug=role_slug,
+        #             name=role_name,
+        #             is_active=True
+        #         )
+
+        role_name = data.get('role')                                    
+        if role_name and not isinstance(role_name, FilterOption):       
+            role_slug = role_name.lower().replace(' ', '-')             
+            try:                                                        
                 data['role'] = FilterOption.objects.get(category=dept_category, slug=role_slug)
-            except FilterOption.DoesNotExist:
-                data['role'] = FilterOption.objects.create(
-                    category=dept_category,
-                    slug=role_slug,
-                    name=role_name,
-                    is_active=True
-                )
+           
+            except FilterOption.DoesNotExist:                           
+                # Check if "Other" option exists                        
+                other_option = FilterOption.objects.filter(             
+                    category=dept_category,                             
+                    name__iexact='other'                                
+                ).first()                                               
+                                                                         
+                # If user selected "Other"...                          
+                if other_option and role_name.lower() != 'other':       
+                    data['role'] = FilterOption.objects.create(        
+                        category=dept_category,                         
+                        slug=role_slug,                                
+                        name=role_name,                                 
+                        is_active=False                                 
+                    )                                                    
+                else:                                                    
+                    data['role'] = FilterOption.objects.create(         
+                        category=dept_category,                         
+                        slug=role_slug,                                 
+                        name=role_name,                                 
+                        is_active=True                                  
+                    )                                                    
 
         religion_name = data.get('religion')
         if religion_name and not isinstance(religion_name, FilterOption):
@@ -125,12 +154,26 @@ class CandidateRegistrationSerializer(serializers.ModelSerializer):
             try:
                 data['religion'] = FilterOption.objects.get(category=religion_category, slug=religion_slug)
             except FilterOption.DoesNotExist:
-                data['religion'] = FilterOption.objects.create(
+                # Check if "Other" option exists
+                other_option = FilterOption.objects.filter(
                     category=religion_category,
-                    slug=religion_slug,
-                    name=religion_name,
-                    is_active=True
-                )
+                    name__iexact='other'
+                ).first()
+                
+                if other_option and religion_name.lower() != 'other':
+                    data['religion'] = FilterOption.objects.create(
+                        category=religion_category,
+                        slug=religion_slug,
+                        name=religion_name,
+                        is_active=False
+                    )
+                else:
+                    data['religion'] = FilterOption.objects.create(
+                        category=religion_category,
+                        slug=religion_slug,
+                        name=religion_name,
+                        is_active=True
+                    )
 
         country_name = data.get('country', 'India')
         if not isinstance(country_name, FilterOption):
@@ -153,17 +196,33 @@ class CandidateRegistrationSerializer(serializers.ModelSerializer):
             try:
                 state = FilterOption.objects.get(category=state_category, slug=state_slug)
             except FilterOption.DoesNotExist:
-                state = FilterOption.objects.create(
+                # Check if "Other" option exists
+                other_option = FilterOption.objects.filter(
                     category=state_category,
-                    slug=state_slug,
-                    name=state_name.title(),
-                    parent=data.get('country'),
-                    is_active=True
-                )
+                    name__iexact='other'
+                ).first()
+                
+                if other_option and state_name.lower() != 'other':
+                    state = FilterOption.objects.create(
+                        category=state_category,
+                        slug=state_slug,
+                        name=state_name.title(),
+                        parent=data.get('country'),
+                        is_active=False
+                    )
+                else:
+                    state = FilterOption.objects.create(
+                        category=state_category,
+                        slug=state_slug,
+                        name=state_name.title(),
+                        parent=data.get('country'),
+                        is_active=True
+                    )
             data['state'] = state
         elif isinstance(state_name, FilterOption):
             state = state_name
             data['state'] = state
+
 
         city_name = data.get('city')
         if city_name and state and not isinstance(city_name, FilterOption):
@@ -171,13 +230,28 @@ class CandidateRegistrationSerializer(serializers.ModelSerializer):
             try:
                 data['city'] = FilterOption.objects.get(category=city_category, slug=city_slug)
             except FilterOption.DoesNotExist:
-                data['city'] = FilterOption.objects.create(
+                # Check if "Other" option exists
+                other_option = FilterOption.objects.filter(
                     category=city_category,
-                    slug=city_slug,
-                    name=city_name.title(),
-                    parent=state,
-                    is_active=True
-                )
+                    name__iexact='other'
+                ).first()
+                
+                if other_option and city_name.lower() != 'other':
+                    data['city'] = FilterOption.objects.create(
+                        category=city_category,
+                        slug=city_slug,
+                        name=city_name.title(),
+                        parent=state,
+                        is_active=False
+                    )
+                else:
+                    data['city'] = FilterOption.objects.create(
+                        category=city_category,
+                        slug=city_slug,
+                        name=city_name.title(),
+                        parent=state,
+                        is_active=True
+                    )
 
         return data
 
@@ -397,12 +471,29 @@ class CandidateUpdateSerializer(serializers.ModelSerializer):
             try:
                 data['role'] = FilterOption.objects.get(category=dept_category, slug=role_slug)
             except FilterOption.DoesNotExist:
-                data['role'] = FilterOption.objects.create(
+                # Check if "Other" option exists in this category
+                other_option = FilterOption.objects.filter(
                     category=dept_category,
-                    slug=role_slug,
-                    name=role_value,
-                    is_active=True
-                )
+                    name__iexact='other'
+                ).first()
+                
+                # If user selected "Other" and provided custom text, create as INACTIVE
+                if other_option and role_value.lower() != 'other':
+                    data['role'] = FilterOption.objects.create(
+                        category=dept_category,
+                        slug=role_slug,
+                        name=role_value,
+                        is_active=False
+                    )
+                else:
+                    # For pre-defined options or when "Other" itself is selected
+                    data['role'] = FilterOption.objects.create(
+                        category=dept_category,
+                        slug=role_slug,
+                        name=role_value,
+                        is_active=True
+                    )
+
         
         religion_value = data.get('religion')
         if religion_value and not isinstance(religion_value, FilterOption):
@@ -410,12 +501,26 @@ class CandidateUpdateSerializer(serializers.ModelSerializer):
             try:
                 data['religion'] = FilterOption.objects.get(category=religion_category, slug=religion_slug)
             except FilterOption.DoesNotExist:
-                data['religion'] = FilterOption.objects.create(
+                # Check if "Other" option exists
+                other_option = FilterOption.objects.filter(
                     category=religion_category,
-                    slug=religion_slug,
-                    name=religion_value,
-                    is_active=True
-                )
+                    name__iexact='other'
+                ).first()
+                
+                if other_option and religion_value.lower() != 'other':
+                    data['religion'] = FilterOption.objects.create(
+                        category=religion_category,
+                        slug=religion_slug,
+                        name=religion_value,
+                        is_active=False
+                    )
+                else:
+                    data['religion'] = FilterOption.objects.create(
+                        category=religion_category,
+                        slug=religion_slug,
+                        name=religion_value,
+                        is_active=True
+                    )
         
         country_value = data.get('country', 'India')
         if not isinstance(country_value, FilterOption):
@@ -438,17 +543,33 @@ class CandidateUpdateSerializer(serializers.ModelSerializer):
             try:
                 state = FilterOption.objects.get(category=state_category, slug=state_slug)
             except FilterOption.DoesNotExist:
-                state = FilterOption.objects.create(
+                # Check if "Other" option exists
+                other_option = FilterOption.objects.filter(
                     category=state_category,
-                    slug=state_slug,
-                    name=state_value.title(),
-                    parent=data.get('country'),
-                    is_active=True
-                )
+                    name__iexact='other'
+                ).first()
+                
+                if other_option and state_value.lower() != 'other':
+                    state = FilterOption.objects.create(
+                        category=state_category,
+                        slug=state_slug,
+                        name=state_value.title(),
+                        parent=data.get('country'),
+                        is_active=False
+                    )
+                else:
+                    state = FilterOption.objects.create(
+                        category=state_category,
+                        slug=state_slug,
+                        name=state_value.title(),
+                        parent=data.get('country'),
+                        is_active=True
+                    )
             data['state'] = state
         elif isinstance(state_value, FilterOption):
             state = state_value
             data['state'] = state
+
         
         city_value = data.get('city')
         if city_value and state and not isinstance(city_value, FilterOption):
@@ -456,13 +577,28 @@ class CandidateUpdateSerializer(serializers.ModelSerializer):
             try:
                 data['city'] = FilterOption.objects.get(category=city_category, slug=city_slug)
             except FilterOption.DoesNotExist:
-                data['city'] = FilterOption.objects.create(
+                # Check if "Other" option exists
+                other_option = FilterOption.objects.filter(
                     category=city_category,
-                    slug=city_slug,
-                    name=city_value.title(),
-                    parent=state,
-                    is_active=True
-                )
+                    name__iexact='other'
+                ).first()
+                
+                if other_option and city_value.lower() != 'other':
+                    data['city'] = FilterOption.objects.create(
+                        category=city_category,
+                        slug=city_slug,
+                        name=city_value.title(),
+                        parent=state,
+                        is_active=False
+                    )
+                else:
+                    data['city'] = FilterOption.objects.create(
+                        category=city_category,
+                        slug=city_slug,
+                        name=city_value.title(),
+                        parent=state,
+                        is_active=True
+                    )
         
         return data
 
