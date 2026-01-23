@@ -134,7 +134,8 @@ class CompanySubscription(models.Model):
         ]
 
     def __str__(self):
-        return f"{self.hr_profile.company_name} - {self.plan.name} ({self.status})"
+        company_name = self.hr_profile.company.name if self.hr_profile.company else "No Company"
+        return f"{company_name} - {self.plan.name} ({self.status})"
 
     def activate(self, admin_user=None):
         """Activate the subscription"""
@@ -282,4 +283,5 @@ class SubscriptionHistory(models.Model):
         verbose_name_plural = 'Subscription History'
 
     def __str__(self):
-        return f"{self.subscription.hr_profile.company_name} - {self.action} at {self.created_at}"
+        company_name = self.subscription.hr_profile.company.name if self.subscription.hr_profile.company else "No Company"
+        return f"{company_name} - {self.action} at {self.created_at}"

@@ -39,12 +39,9 @@ def create_profile_step_reminder_on_role_update(sender, instance, created, **kwa
             HRProfile.objects.create(
                 user=instance,
                 full_name=f"{instance.first_name or ''} {instance.last_name or ''}".strip() or 'N/A',
-                company_name='',
                 designation='',
                 phone='',
-                company_website='',
-                company_size='1-10',
-                is_verified=False
+                company=None  # Company will be set when user completes registration
             )
 
         # Log recruiter registration

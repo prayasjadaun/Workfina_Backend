@@ -1767,7 +1767,7 @@ def update_candidate_hiring_status(request, candidate_id):
                         'status': new_status,
                         'company_name': company_name,
                         'position_title': position_title,
-                        'hr_company': request.user.hr_profile.company_name
+                        'hr_company': request.user.hr_profile.company.name if request.user.hr_profile.company else "No Company"
                     }
                 )
                 print(f'[DEBUG] Sent hiring notification to candidate {candidate.user.email}')

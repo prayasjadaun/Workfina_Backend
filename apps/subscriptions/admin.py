@@ -159,9 +159,10 @@ class CompanySubscriptionAdmin(admin.ModelAdmin):
         return super().formfield_for_foreignkey(db_field, request, **kwargs)
 
     def company_info(self, obj):
+        company_name = obj.hr_profile.company.name if obj.hr_profile.company else "No Company"
         return format_html(
             '<strong>{}</strong><br><small style="color: #666;">{}</small>',
-            obj.hr_profile.company_name,
+            company_name,
             obj.hr_profile.user.email
         )
     company_info.short_description = 'Company'
@@ -333,7 +334,7 @@ class SubscriptionHistoryAdmin(admin.ModelAdmin):
         return super().formfield_for_foreignkey(db_field, request, **kwargs)
 
     def company_name(self, obj):
-        return obj.subscription.hr_profile.company_name
+        return obj.subscription.hr_profile.company.name if obj.subscription.hr_profile.company else "No Company"
     company_name.short_description = 'Company'
 
     def has_add_permission(self, request):

@@ -1,11 +1,11 @@
 from rest_framework import status, generics
 from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from django.db.models import Q
-from .models import HRProfile
+from .models import HRProfile, Company
 from .serializers import HRRegistrationSerializer, HRProfileSerializer
-from apps.candidates.models import Candidate, UnlockHistory
+from apps.candidates.models import Candidate, UnlockHistory, FilterCategory, FilterOption
 from apps.candidates.serializers import MaskedCandidateSerializer, FullCandidateSerializer
 
 class HRRegistrationView(generics.CreateAPIView):
@@ -21,13 +21,26 @@ class HRRegistrationView(generics.CreateAPIView):
         # If profile already exists, update it instead of creating new
         if hasattr(request.user, 'hr_profile'):
             profile = request.user.hr_profile
-            serializer = HRProfileSerializer(profile, data=request.data, partial=True)
+            serializer = self.get_serializer(profile, data=request.data, partial=True)
             if serializer.is_valid():
                 serializer.save()
-                return Response(serializer.data, status=status.HTTP_200_OK)
+                # Refresh from database to get updated company with locations
+                profile.refresh_from_db()
+                # Return with HRProfileSerializer to get full company details
+                response_serializer = HRProfileSerializer(profile, context={'request': request})
+                return Response(response_serializer.data, status=status.HTTP_200_OK)
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-        return super().post(request, *args, **kwargs)
+        # Create new profile
+        serializer = self.get_serializer(data=request.data)
+        if serializer.is_valid():
+            hr_profile = serializer.save()
+            # Refresh from database to get related company with locations
+            hr_profile.refresh_from_db()
+            # Return with HRProfileSerializer to get full company details
+            response_serializer = HRProfileSerializer(hr_profile, context={'request': request})
+            return Response(response_serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
@@ -135,10 +148,27 @@ def filter_candidates(request):
     
     try:
         hr_profile = request.user.hr_profile
+
+        # Check if HR profile is verified
         if not hr_profile.is_verified:
             return Response({
-                'error': 'Company verification pending. Cannot view candidates.'
+                'error': 'Your HR profile verification is pending. Please wait for admin approval.',
+                'verification_status': {
+                    'hr_verified': False,
+                    'company_verified': hr_profile.company.is_verified if hr_profile.company else False
+                }
             }, status=status.HTTP_403_FORBIDDEN)
+
+        # Check if company exists and is verified
+        if not hr_profile.company or not hr_profile.company.is_verified:
+            return Response({
+                'error': 'Company verification pending. Cannot view candidates.',
+                'verification_status': {
+                    'hr_verified': hr_profile.is_verified,
+                    'company_verified': False
+                }
+            }, status=status.HTTP_403_FORBIDDEN)
+
     except HRProfile.DoesNotExist:
         return Response({
             'error': 'HR profile not found'
@@ -275,7 +305,372 @@ def filter_candidates(request):
             'ctc_range': f"{min_ctc}-{max_ctc}"
         }
     })
-    
-    
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def get_countries(request):
+    """
+    Get all countries for dropdown
+    Query params:
+    - search: search by name (optional)
+    """
+    try:
+        country_category = FilterCategory.objects.get(slug='country')
+        countries = FilterOption.objects.filter(
+            category=country_category,
+            is_active=True
+        )
+
+        # Search functionality
+        search = request.query_params.get('search', '').strip()
+        if search:
+            countries = countries.filter(name__icontains=search)
+
+        countries = countries.values('id', 'name', 'slug').order_by('name')
+
+        return Response({
+            'success': True,
+            'countries': list(countries)
+        })
+    except FilterCategory.DoesNotExist:
+        return Response({
+            'success': False,
+            'error': 'Country category not found'
+        }, status=status.HTTP_404_NOT_FOUND)
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def get_states(request):
+    """
+    Get states filtered by country
+    Query params:
+    - country: country ID (optional - filters states by country)
+    - search: search by name (optional)
+    """
+    try:
+        state_category = FilterCategory.objects.get(slug='state')
+        states = FilterOption.objects.filter(
+            category=state_category,
+            is_active=True
+        )
+
+        # Filter by country (parent relationship)
+        country_id = request.query_params.get('country')
+        if country_id:
+            states = states.filter(parent_id=country_id)
+
+        # Search functionality
+        search = request.query_params.get('search', '').strip()
+        if search:
+            states = states.filter(name__icontains=search)
+
+        states = states.values('id', 'name', 'slug', 'parent').order_by('name')
+
+        return Response({
+            'success': True,
+            'states': list(states)
+        })
+    except FilterCategory.DoesNotExist:
+        return Response({
+            'success': False,
+            'error': 'State category not found'
+        }, status=status.HTTP_404_NOT_FOUND)
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def get_cities(request):
+    """
+    Get cities filtered by state
+    Query params:
+    - state: state ID (optional - filters cities by state)
+    - search: search by name (optional)
+    """
+    try:
+        city_category = FilterCategory.objects.get(slug='city')
+        cities = FilterOption.objects.filter(
+            category=city_category,
+            is_active=True
+        )
+
+        # Filter by state (parent relationship)
+        state_id = request.query_params.get('state')
+        if state_id:
+            cities = cities.filter(parent_id=state_id)
+
+        # Search functionality
+        search = request.query_params.get('search', '').strip()
+        if search:
+            cities = cities.filter(name__icontains=search)
+
+        cities = cities.values('id', 'name', 'slug', 'parent').order_by('name')
+
+        return Response({
+            'success': True,
+            'cities': list(cities)
+        })
+    except FilterCategory.DoesNotExist:
+        return Response({
+            'success': False,
+            'error': 'City category not found'
+        }, status=status.HTTP_404_NOT_FOUND)
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def check_company_location(request):
+    """
+    Check if company already exists with the given location
+    Query params:
+    - company_name: Company name (required)
+    - city_id: City UUID (required)
+
+    Returns:
+    - exists: Boolean indicating if duplicate exists
+    - message: User-friendly message
+    """
+    company_name = request.query_params.get('company_name', '').strip()
+    city_id = request.query_params.get('city_id', '').strip()
+
+    if not company_name or not city_id:
+        return Response({
+            'success': False,
+            'error': 'company_name and city_id are required'
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    # Check if company exists
+    existing_company = Company.objects.filter(name__iexact=company_name).first()
+
+    if not existing_company:
+        return Response({
+            'success': True,
+            'exists': False,
+            'message': 'Company location is available'
+        })
+
+    # Check if this company already has this location
+    from .models import CompanyLocation
+    duplicate_location = CompanyLocation.objects.filter(
+        company=existing_company,
+        city_id=city_id
+    ).exists()
+
+    if duplicate_location:
+        return Response({
+            'success': True,
+            'exists': True,
+            'message': f'A recruiter from {company_name} in this city is already registered.',
+            'suggestion': 'Please use a different location or contact your company admin.'
+        })
+
+    return Response({
+        'success': True,
+        'exists': False,
+        'message': 'Company location is available'
+    })
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def search_companies(request):
+    """
+    Search companies for autocomplete/autosuggest
+    Query params:
+    - q: search query (required)
+    - limit: number of results (optional, default 10)
+
+    Returns:
+    - Companies matching search query with logo, name, website, size
+    - Ordered by: verified first, then by name
+    """
+    search_query = request.query_params.get('q', '').strip()
+    limit = int(request.query_params.get('limit', 10))
+
+    if not search_query:
+        return Response({
+            'success': False,
+            'error': 'Search query (q) is required'
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    # Search companies by name (case-insensitive partial match)
+    companies = Company.objects.filter(
+        name__icontains=search_query
+    ).order_by(
+        '-is_verified',  # Verified companies first
+        'name'
+    )[:limit]
+
+    # Serialize results
+    from .serializers import CompanySearchSerializer
+    serializer = CompanySearchSerializer(companies, many=True, context={'request': request})
+
+    return Response({
+        'success': True,
+        'query': search_query,
+        'count': companies.count(),
+        'companies': serializer.data
+    })
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def search_companies_by_website(request):
+    """
+    Search companies by website URL for autocomplete
+    Query params:
+    - q: search query (website URL) (required)
+    - limit: number of results (optional, default 10)
+
+    Returns:
+    - Companies matching website URL with logo, name, website, size
+    - Ordered by: verified first, then by name
+    """
+    search_query = request.query_params.get('q', '').strip()
+    limit = int(request.query_params.get('limit', 10))
+
+    if not search_query:
+        return Response({
+            'success': False,
+            'error': 'Search query (q) is required'
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    # Search companies by website (case-insensitive partial match)
+    companies = Company.objects.filter(
+        website__icontains=search_query
+    ).order_by(
+        '-is_verified',  # Verified companies first
+        'name'
+    )[:limit]
+
+    # Serialize results
+    from .serializers import CompanySearchSerializer
+    serializer = CompanySearchSerializer(companies, many=True, context={'request': request})
+
+    return Response({
+        'success': True,
+        'query': search_query,
+        'count': companies.count(),
+        'companies': serializer.data
+    })
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def add_custom_location(request):
+    """
+    Add custom city/state/country (requires admin approval)
+    Request body:
+    {
+        "type": "city|state|country",
+        "name": "Custom Location Name",
+        "parent": "parent-uuid" (required for city/state)
+    }
+    """
+    if request.user.role != 'hr':
+        return Response({
+            'success': False,
+            'error': 'Only HR users can add custom locations'
+        }, status=status.HTTP_403_FORBIDDEN)
+
+    location_type = request.data.get('type')
+    name = request.data.get('name', '').strip()
+    parent_id = request.data.get('parent')
+
+    if not location_type or not name:
+        return Response({
+            'success': False,
+            'error': 'Type and name are required'
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    if location_type not in ['city', 'state', 'country']:
+        return Response({
+            'success': False,
+            'error': 'Invalid type. Must be city, state, or country'
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    # Check if parent is required
+    if location_type in ['city', 'state'] and not parent_id:
+        return Response({
+            'success': False,
+            'error': f'Parent is required for {location_type}'
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        # Get category
+        category = FilterCategory.objects.get(slug=location_type)
+
+        # Check if already exists (active or inactive)
+        existing = FilterOption.objects.filter(
+            category=category,
+            name__iexact=name
+        ).first()
+
+        if existing:
+            if existing.is_active:
+                return Response({
+                    'success': False,
+                    'error': f'{location_type.capitalize()} already exists'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            else:
+                return Response({
+                    'success': False,
+                    'error': f'{location_type.capitalize()} is pending approval',
+                    'pending': True
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+        # Verify parent exists if provided
+        parent = None
+        if parent_id:
+            parent = FilterOption.objects.filter(id=parent_id).first()
+            if not parent:
+                return Response({
+                    'success': False,
+                    'error': 'Invalid parent ID'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+        # Create slug from name
+        from django.utils.text import slugify
+        slug = slugify(name)
+
+        # Ensure unique slug
+        base_slug = slug
+        counter = 1
+        while FilterOption.objects.filter(category=category, slug=slug).exists():
+            slug = f"{base_slug}-{counter}"
+            counter += 1
+
+        # Create custom location (inactive by default - requires approval)
+        custom_location = FilterOption.objects.create(
+            category=category,
+            name=name.title(),
+            slug=slug,
+            parent=parent,
+            is_active=False  # Requires admin approval
+        )
+
+        return Response({
+            'success': True,
+            'message': f'Custom {location_type} submitted for approval',
+            'location': {
+                'id': str(custom_location.id),
+                'name': custom_location.name,
+                'slug': custom_location.slug,
+                'is_active': custom_location.is_active,
+                'status': 'pending_approval'
+            }
+        }, status=status.HTTP_201_CREATED)
+
+    except FilterCategory.DoesNotExist:
+        return Response({
+            'success': False,
+            'error': f'{location_type.capitalize()} category not found'
+        }, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        return Response({
+            'success': False,
+            'error': str(e)
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 

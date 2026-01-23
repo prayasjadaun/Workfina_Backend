@@ -4,21 +4,27 @@ from django.utils import timezone
 
 
 class WalletSerializer(serializers.ModelSerializer):
-    company_name = serializers.CharField(source='hr_profile.company_name', read_only=True)
-    
+    company_name = serializers.SerializerMethodField()
+
     class Meta:
         model = Wallet
         fields = ['id', 'company_name', 'balance', 'total_spent', 'created_at']
         read_only_fields = ['balance', 'total_spent', 'created_at']
 
+    def get_company_name(self, obj):
+        return obj.hr_profile.company.name if obj.hr_profile.company else "No Company"
+
 class WalletTransactionSerializer(serializers.ModelSerializer):
-    company_name = serializers.CharField(source='wallet.hr_profile.company_name', read_only=True)
+    company_name = serializers.SerializerMethodField()
     created_at = serializers.SerializerMethodField()
     
+    def get_company_name(self, obj):
+        return obj.wallet.hr_profile.company.name if obj.wallet.hr_profile.company else "No Company"
+
     def get_created_at(self, obj):
         local_time = timezone.localtime(obj.created_at)
         return local_time.strftime('%d %b %Y, %I:%M %p')
-    
+
     class Meta:
         model = WalletTransaction
         fields = [

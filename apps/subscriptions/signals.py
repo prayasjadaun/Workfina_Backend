@@ -14,13 +14,14 @@ def create_subscription_history(sender, instance, created, **kwargs):
         # History for new subscription is already created in admin
         # This handles creation from other sources (API, scripts, etc.)
         if not instance.history.filter(action='CREATED').exists():
+            company_name = instance.hr_profile.company.name if instance.hr_profile.company else "No Company"
             SubscriptionHistory.objects.create(
                 subscription=instance,
                 action='CREATED',
                 details={
                     'plan': instance.plan.name,
                     'status': instance.status,
-                    'company': instance.hr_profile.company_name
+                    'company': company_name
                 },
                 notes='Subscription created'
             )

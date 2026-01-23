@@ -62,7 +62,7 @@ class CompanySubscriptionSerializer(serializers.ModelSerializer):
     plan = SubscriptionPlanSerializer(read_only=True)
     plan_id = serializers.UUIDField(write_only=True, required=False)
 
-    company_name = serializers.CharField(source='hr_profile.company_name', read_only=True)
+    company_name = serializers.SerializerMethodField()
     company_email = serializers.CharField(source='hr_profile.user.email', read_only=True)
 
     status_display = serializers.CharField(source='get_status_display', read_only=True)
@@ -112,6 +112,9 @@ class CompanySubscriptionSerializer(serializers.ModelSerializer):
             'created_at',
             'updated_at',
         ]
+
+    def get_company_name(self, obj):
+        return obj.hr_profile.company.name if obj.hr_profile.company else "No Company"
 
     def get_days_remaining(self, obj):
         return obj.days_until_expiry()
