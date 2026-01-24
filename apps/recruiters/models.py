@@ -26,6 +26,7 @@ class Company(models.Model):
         validators=[FileExtensionValidator(allowed_extensions=['png', 'jpg', 'jpeg'])],
         help_text="Company logo (PNG, JPG, JPEG only)"
     )
+    company_location = models.ManyToManyField('CompanyLocation', related_name='company_locations', blank=True)
     website = models.URLField(blank=True)
     size = models.CharField(max_length=50, choices=[
         ('1-10', '1-10 employees'),

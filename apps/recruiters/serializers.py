@@ -144,14 +144,22 @@ class HRRegistrationSerializer(serializers.ModelSerializer):
             state = FilterOption.objects.filter(id=state_id).first() if state_id else None
             country = FilterOption.objects.filter(id=country_id).first() if country_id else None
 
-            CompanyLocation.objects.create(
+            # Check if THIS EXACT location already exists (same city)
+            existing_location = CompanyLocation.objects.filter(
                 company=company,
-                city=city,
-                state=state,
-                country=country,
-                address=address,
-                is_headquarters=is_headquarters
-            )
+                city=city
+            ).first()
+
+            if not existing_location:
+                # Create new location only if it doesn't exist
+                CompanyLocation.objects.create(
+                    company=company,
+                    city=city,
+                    state=state,
+                    country=country,
+                    address=address,
+                    is_headquarters=is_headquarters
+                )
 
         # Create HR Profile
         validated_data['user'] = user
@@ -200,23 +208,14 @@ class HRRegistrationSerializer(serializers.ModelSerializer):
                 state = FilterOption.objects.filter(id=state_id).first() if state_id else None
                 country = FilterOption.objects.filter(id=country_id).first() if country_id else None
 
-                # Check if location already exists for this company
-                existing_location = CompanyLocation.objects.filter(company=company).first()
+                # Check if THIS EXACT location already exists for this company (same city)
+                existing_location = CompanyLocation.objects.filter(
+                    company=company,
+                    city=city
+                ).first()
 
-                if existing_location:
-                    # Update existing location
-                    if city:
-                        existing_location.city = city
-                    if state:
-                        existing_location.state = state
-                    if country:
-                        existing_location.country = country
-                    if address:
-                        existing_location.address = address
-                    existing_location.is_headquarters = is_headquarters
-                    existing_location.save()
-                else:
-                    # Create new location
+                if not existing_location:
+                    # Create new location only if it doesn't exist
                     CompanyLocation.objects.create(
                         company=company,
                         city=city,
@@ -348,23 +347,14 @@ class HRProfileSerializer(serializers.ModelSerializer):
             state = FilterOption.objects.filter(id=state_id).first() if state_id else None
             country = FilterOption.objects.filter(id=country_id).first() if country_id else None
 
-            # Check if location already exists for this company
-            existing_location = CompanyLocation.objects.filter(company=instance.company).first()
+            # Check if THIS EXACT location already exists for this company (same city)
+            existing_location = CompanyLocation.objects.filter(
+                company=instance.company,
+                city=city
+            ).first()
 
-            if existing_location:
-                # Update existing location
-                if city:
-                    existing_location.city = city
-                if state:
-                    existing_location.state = state
-                if country:
-                    existing_location.country = country
-                if address:
-                    existing_location.address = address
-                existing_location.is_headquarters = is_headquarters
-                existing_location.save()
-            else:
-                # Create new location
+            if not existing_location:
+                # Create new location only if it doesn't exist
                 CompanyLocation.objects.create(
                     company=instance.company,
                     city=city,
