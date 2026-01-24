@@ -9,7 +9,7 @@ User = get_user_model()
 class WorkExperienceSerializer(serializers.ModelSerializer):
     class Meta:
         model = WorkExperience
-        fields = ['id', 'company_name', 'role_title', 'start_date', 'end_date', 'is_current', 'current_ctc','location', 'description']
+        fields = ['id', 'company_name', 'role_title', 'start_date', 'end_date', 'is_current', 'current_ctc','location', 'description','is_gap_period','gap_reason' ]
 
 class EducationSerializer(serializers.ModelSerializer):
     class Meta:
@@ -269,6 +269,8 @@ class MaskedCandidateSerializer(serializers.ModelSerializer):
     role_name = serializers.CharField(source='role.name', read_only=True)
     city_name = serializers.CharField(source='city.name', read_only=True)
     profile_image_url = serializers.SerializerMethodField()
+    experience_years = serializers.SerializerMethodField()  
+
 
     class Meta:
         model = Candidate
@@ -284,7 +286,44 @@ class MaskedCandidateSerializer(serializers.ModelSerializer):
                 return request.build_absolute_uri(obj.profile_image.url)
             return obj.profile_image.url
         return None
-
+    def get_experience_years(self, obj):
+        """Calculate total experience in years and months from work_experiences"""
+        from datetime import datetime
+        
+        work_experiences = obj.work_experiences.all()
+        if not work_experiences:
+            exp_years = obj.experience_years or 0
+            if exp_years == 0:
+                return "0 years"
+            elif exp_years == 1:
+                return "1 year"
+            else:
+                return f"{exp_years} years"
+        
+        total_months = 0
+        for exp in work_experiences:
+            start_date = exp.start_date
+            end_date = exp.end_date if exp.end_date else datetime.now().date()
+            
+            # Calculate total months
+            months_diff = ((end_date.year - start_date.year) * 12) + (end_date.month - start_date.month)
+            total_months += months_diff
+        
+        # Calculate years and remaining months
+        years = total_months // 12
+        months = total_months % 12
+        
+        # Format the output
+        if years == 0 and months == 0:
+            return "0 years"
+        elif years == 0:
+            return f"{months} month{'s' if months != 1 else ''}"
+        elif months == 0:
+            return f"{years} year{'s' if years != 1 else ''}"
+        else:
+            year_text = f"{years} year{'s' if years != 1 else ''}"
+            month_text = f"{months} month{'s' if months != 1 else ''}"
+            return f"{year_text} {month_text}"
 
 class FullCandidateSerializer(serializers.ModelSerializer):
     skills_list = serializers.SerializerMethodField()
@@ -303,6 +342,8 @@ class FullCandidateSerializer(serializers.ModelSerializer):
 
     work_experiences = WorkExperienceSerializer(many=True, read_only=True)
     educations = EducationSerializer(many=True, read_only=True)
+    experience_years = serializers.SerializerMethodField()
+
 
     class Meta:
         model = Candidate
@@ -345,6 +386,39 @@ class FullCandidateSerializer(serializers.ModelSerializer):
                 return request.build_absolute_uri(obj.profile_image.url)
             return obj.profile_image.url
         return None
+    
+    def get_experience_years(self, obj):
+        """Calculate total experience in years from work_experiences"""
+        from datetime import datetime
+        
+        work_experiences = obj.work_experiences.all()
+        if not work_experiences:
+           exp_years = obj.experience_years or 0
+           if exp_years == 0:
+               return "0 years"
+           elif exp_years == 1:
+                return "1 year"
+           else:
+                return f"{exp_years} years"
+        
+        total_months = 0
+        for exp in work_experiences:
+            start_date = exp.start_date
+            end_date = exp.end_date if exp.end_date else datetime.now().date()
+            months_diff = ((end_date.year - start_date.year) * 12) + (end_date.month - start_date.month)
+            total_months += months_diff
+    
+        years = total_months // 12
+        months = total_months % 12
+    
+        if years == 0 and months == 0:
+           return "0 years"
+        elif years == 0:
+           return f"{months} month{'s' if months != 1 else ''}"
+        elif months == 0:
+          return f"{years} year{'s' if years != 1 else ''}"
+        else:
+           return f"{years} year{'s' if years != 1 else ''} {months} month{'s' if months != 1 else ''}"
 
     def get_last_availability_update(self, obj):
         if obj.last_availability_update:
@@ -352,6 +426,8 @@ class FullCandidateSerializer(serializers.ModelSerializer):
             ist_time = obj.last_availability_update.astimezone(ist)
             return ist_time.strftime('%d %b %Y, %I:%M %p IST')
         return None
+    
+
 
 
 class UnlockHistorySerializer(serializers.ModelSerializer):
