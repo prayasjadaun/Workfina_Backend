@@ -77,16 +77,21 @@ class CandidateRegistrationView(generics.CreateAPIView):
                         print("=" * 50)
                         
                         for exp_data in work_exp_list:
+
+                            is_gap = exp_data.get('is_gap_period', False)
+                            
                             WorkExperience.objects.create(
                                 candidate=candidate,
-                                company_name=exp_data.get('company_name', ''),
-                                role_title=exp_data.get('role_title', ''),
+                                company_name=exp_data.get('company_name', '')if not is_gap else '',
+                                role_title=exp_data.get('role_title', '')if not is_gap else '',
                                 start_date=f"{exp_data.get('start_year')}-{_month_to_number(exp_data.get('start_month'))}-01",
                                 end_date=f"{exp_data.get('end_year')}-{_month_to_number(exp_data.get('end_month'))}-01" if not exp_data.get('is_current') and exp_data.get('end_year') else None,
                                 is_current=exp_data.get('is_current', False),
                                 current_ctc=float(exp_data.get('ctc')) if exp_data.get('ctc') and exp_data.get('ctc').strip() else None,  
-                                location=exp_data.get('location', ''),
-                                description=exp_data.get('description', ''),
+                                location=exp_data.get('location', '')if not is_gap else '',
+                                description=exp_data.get('description', '')if not is_gap else '',
+                                is_gap_period=is_gap,                                                 # ADD
+                                gap_reason=exp_data.get('gap_reason', '') if is_gap else None, 
                             )
                             print(f"✅ Saved work experience: {exp_data.get('company_name')}")
                     except Exception as e:
@@ -384,6 +389,7 @@ def update_candidate_profile(request):
                 print("=" * 80)
                 
                 for i, exp_data in enumerate(work_exp_list, 1):
+                    is_gap = exp_data.get('is_gap_period', False)
                     print(f"\n--- Creating Experience #{i} ---")
                     print(f"Company: {exp_data.get('company_name')}")
                     print(f"Role: {exp_data.get('job_role')}")
@@ -392,13 +398,16 @@ def update_candidate_profile(request):
                     
                     work_exp = WorkExperience.objects.create(
                         candidate=candidate,
-                        company_name=exp_data.get('company_name', ''),
-                        role_title=exp_data.get('role_title', ''),
+                        company_name=exp_data.get('company_name', '')if not is_gap else '',
+                        role_title=exp_data.get('role_title', '')if not is_gap else '',
                         start_date=f"{exp_data.get('start_year')}-{_month_to_number(exp_data.get('start_month'))}-01",
                         end_date=f"{exp_data.get('end_year')}-{_month_to_number(exp_data.get('end_month'))}-01" if not exp_data.get('is_current') and exp_data.get('end_year') else None,
                         is_current=exp_data.get('is_current', False),
                         current_ctc=float(exp_data.get('ctc')) if exp_data.get('ctc') and exp_data.get('ctc').strip() else None,                        location=exp_data.get('location', ''),
-                        description=exp_data.get('description', ''),
+                        description=exp_data.get('description', '')if not is_gap else '',
+                        # location=exp_data.get('location', '') if not is_gap else '',
+                        is_gap_period=is_gap,                                                 # ADD
+                        gap_reason=exp_data.get('gap_reason', '') if is_gap else None,  
                     )
                     
                     print(f"✅ Saved - Location: '{work_exp.location}', Description: '{work_exp.description}'")
@@ -1284,28 +1293,38 @@ def save_candidate_step(request):
                 work_exp_list = json.loads(work_experience_data)
 
                 for exp_data in work_exp_list:
+                    is_gap = exp_data.get('is_gap_period', False)
+                    print(f"[DEBUG] Processing entry - is_gap: {is_gap}")  
                     WorkExperience.objects.create(
                         candidate=candidate,
-                        company_name=exp_data.get('company_name', ''),
-                        role_title=exp_data.get('role_title', ''),
+                        company_name=exp_data.get('company_name', '')if not is_gap else '',
+                        role_title=exp_data.get('role_title', '')if not is_gap else '',
                         start_date=f"{exp_data.get('start_year')}-{_month_to_number(exp_data.get('start_month'))}-01",
                         end_date=f"{exp_data.get('end_year')}-{_month_to_number(exp_data.get('end_month'))}-01" if not exp_data.get('is_current') and exp_data.get('end_year') else None,
                         is_current=exp_data.get('is_current', False),
                         current_ctc=float(exp_data.get('ctc', 0)) if exp_data.get('ctc') else None,
-                        location=exp_data.get('location', ''),
-                        description=exp_data.get('description', ''),
+                        location=exp_data.get('location', '')if not is_gap else '',
+                        description=exp_data.get('description', '')if not is_gap else '',
+                        is_gap_period=is_gap,  # ✅ ADD THIS
+                        gap_reason=exp_data.get('gap_reason', '') if is_gap else None,
                     )
 
             # Calculate experience
-            total_exp = 0
             from datetime import datetime
+            total_months = 0
             for exp in candidate.work_experiences.all():
-                start_year = exp.start_date.year
-                end_year = exp.end_date.year if exp.end_date else datetime.now().year
-                total_exp += (end_year - start_year)
+                start_date = exp.start_date
+                end_date = exp.end_date if exp.end_date else datetime.now()
+                
+                # Calculate total months between start and end
+                months_diff = ((end_date.year - start_date.year) * 12) + (end_date.month - start_date.month)
+                total_months += months_diff
 
-            if total_exp > 0:
-                update_data['experience_years'] = total_exp
+            # Convert total months to years (integer division)
+            total_years = total_months // 12
+
+            if total_years > 0:
+                update_data['experience_years'] = total_years
 
             # Mark step 2 as completed ONLY if work experience was added
             if not candidate.step2_completed and candidate.work_experiences.exists():

@@ -57,6 +57,7 @@ class FilterOption(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     
     
+    
     class Meta:
         ordering = ['display_order', 'name']
         unique_together = ['category', 'slug']
@@ -208,6 +209,8 @@ class WorkExperience(models.Model):
     location = models.CharField(max_length=255, blank=True)
     description = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    is_gap_period = models.BooleanField(default=False, help_text="True if this is a career gap")
+    gap_reason = models.TextField(blank=True, null=True, help_text="Reason for career gap")
     
     class Meta:
         ordering = ['-start_date']

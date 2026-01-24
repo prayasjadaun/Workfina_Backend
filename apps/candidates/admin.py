@@ -5,7 +5,8 @@ from .models import *
 class WorkExperienceInline(admin.TabularInline):
     model = WorkExperience
     extra = 1
-    fields = ['company_name', 'role_title', 'start_date', 'end_date', 'is_current', 'location','current_ctc', 'description']
+    fields = ['company_name', 'role_title', 'start_date', 'end_date', 'is_current', 'location','current_ctc', 'description','is_gap_period', 
+        'gap_reason']
 
 class EducationInline(admin.TabularInline):
     model = Education
@@ -201,10 +202,34 @@ class CandidateFollowupAdmin(admin.ModelAdmin):
 
 @admin.register(WorkExperience)
 class WorkExperienceAdmin(admin.ModelAdmin):
-    list_display = ['candidate', 'company_name', 'role_title','current_ctc','start_date', 'end_date', 'is_current']
-    list_filter = ['is_current', 'start_date']
-    search_fields = ['candidate__masked_name', 'company_name', 'role_title']
+    list_display = ['candidate', 'company_name', 'role_title','current_ctc','start_date', 'end_date', 'is_current','is_gap_period', 'gap_type_display']
+    list_filter = ['is_current', 'start_date','is_gap_period']
+    search_fields = ['candidate__masked_name', 'company_name', 'role_title','gap_reason']
     raw_id_fields = ['candidate']
+
+    def gap_type_display(self, obj):
+        if obj.is_gap_period:
+            return "🔴 GAP"
+        return "🟢 WORK"
+    gap_type_display.short_description = 'Type'
+    
+    # ✅ ADD THIS - Custom fieldsets for detail view
+    fieldsets = (
+        ('Basic Info', {
+            'fields': ('candidate', 'is_gap_period')
+        }),
+        ('Work Details', {
+            'fields': ('company_name', 'role_title', 'location', 'current_ctc', 'description'),
+            'classes': ('collapse',) if True else (),  # Can be collapsed if is_gap_period
+        }),
+        ('Gap Details', {
+            'fields': ('gap_reason',),
+            'classes': ('collapse',),
+        }),
+        ('Timeline', {
+            'fields': ('start_date', 'end_date', 'is_current')
+        }),
+    )
 
 @admin.register(Education)
 class EducationAdmin(admin.ModelAdmin):
