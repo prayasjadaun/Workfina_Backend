@@ -270,7 +270,6 @@ class WorkExperienceAdmin(admin.ModelAdmin):
         return "🟢 WORK"
     gap_type_display.short_description = 'Type'
     
-    # ✅ ADD THIS - Custom fieldsets for detail view
     fieldsets = (
         ('Basic Info', {
             'fields': ('candidate', 'is_gap_period')
@@ -288,7 +287,7 @@ class WorkExperienceAdmin(admin.ModelAdmin):
         }),
     )
 
-@admin.register(Education)
+# @admin.register(Education)  # Removed from sidebar - accessible via Candidate inline
 class EducationAdmin(admin.ModelAdmin):
     list_display = ['candidate', 'institution_name', 'degree', 'start_year', 'end_year', 'is_ongoing']
     list_filter = ['is_ongoing', 'start_year']
@@ -377,11 +376,10 @@ class HiringAvailabilityUIAdmin(admin.ModelAdmin):
         super().save_model(request, obj, form, change)
 
 
-# ✅ YE PURA SECTION ADD KARO
-@admin.register(FilterOption)
+# @admin.register(FilterOption)  # Removed from sidebar - accessible via FilterCategory inline
 class FilterOptionAdmin(admin.ModelAdmin):
     list_display = [
-        'name', 'category', 'approval_badge', 'is_active', 
+        'name', 'category', 'approval_badge', 'is_active',
         'submitted_by', 'submitted_at', 'created_at'
     ]
     list_filter = ['is_approved', 'is_active', 'category', 'submitted_at']

@@ -39,16 +39,7 @@ def get_dashboard_content(request):
         })
         
     except DashboardContent.DoesNotExist:
-        # Return default values if no content exists
-        default_content = {
-            'main_heading': 'Ready to take the\\nnext step?',
-            'main_heading_lines': ['Ready to take the', 'next step?'],
-            'subheading': None,
-            'welcome_prefix': 'Hello 👋',
-            'is_active': True
-        }
-        
         return Response({
             'success': True,
-            'content': default_content
+            'content': None
         })
