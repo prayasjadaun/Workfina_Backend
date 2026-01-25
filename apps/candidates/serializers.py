@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
-from .models import Candidate, UnlockHistory, FilterCategory, FilterOption, CandidateNote, CandidateFollowup, WorkExperience, Education
+from .models import Candidate, ProfileTip, UnlockHistory, FilterCategory, FilterOption, CandidateNote, CandidateFollowup, WorkExperience, Education
 from django.utils import timezone
 import pytz
 
@@ -55,8 +55,6 @@ class CandidateRegistrationSerializer(serializers.ModelSerializer):
         'languages': {'required': True},
         'street_address': {'required': True},
         'career_objective': {'required': True},
-        # 'current_ctc': {'required': False},
-        # 'expected_ctc': {'required': False},
         'joining_availability': {'required': True},
         'notice_period_details': {'required': True},  
         'resume': {'required': False},
@@ -67,24 +65,26 @@ class CandidateRegistrationSerializer(serializers.ModelSerializer):
         'skills': {'required': False},
         'willing_to_relocate': {'required': False}
     }
+    
+    def validate_willing_to_relocate(self, value):
+        """Convert YES/NO to boolean"""
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, str):
+            return value.upper() == 'YES'
+        return False
+    
+    def validate(self, data):
+        from django.utils import timezone
         
-        def validate_willing_to_relocate(self, value):
-        # """Convert YES/NO to boolean"""
-            if isinstance(value, bool):
-               return value
-            if isinstance(value, str):
-              return value.upper() == 'YES'
-            return False
-
-        def validate(self, data):
         # Validate notice period
-         if data.get('joining_availability') == 'NOTICE_PERIOD':
+        if data.get('joining_availability') == 'NOTICE_PERIOD':
             if not data.get('notice_period_details'):
                 raise serializers.ValidationError({
                     'notice_period_details': 'Required when joining availability is notice period'
                 })
-
-    def validate(self, data):
+        
+        # Get or create categories
         dept_category, _ = FilterCategory.objects.get_or_create(
             slug='department',
             defaults={'name': 'Department', 'display_order': 1}
@@ -106,161 +106,219 @@ class CandidateRegistrationSerializer(serializers.ModelSerializer):
             defaults={'name': 'City', 'display_order': 5}
         )
 
-        # role_name = data.get('role')
-        # if role_name and not isinstance(role_name, FilterOption):
-        #     role_slug = role_name.lower().replace(' ', '-')
-        #     try:
-        #         data['role'] = FilterOption.objects.get(category=dept_category, slug=role_slug)
-        #     except FilterOption.DoesNotExist:
-        #         data['role'] = FilterOption.objects.create(
-        #             category=dept_category,
-        #             slug=role_slug,
-        #             name=role_name,
-        #             is_active=True
-        #         )
-
-        role_name = data.get('role')                                    
-        if role_name and not isinstance(role_name, FilterOption):       
-            role_slug = role_name.lower().replace(' ', '-')             
-            try:                                                        
-                data['role'] = FilterOption.objects.get(category=dept_category, slug=role_slug)
-           
-            except FilterOption.DoesNotExist:                           
-                # Check if "Other" option exists                        
-                other_option = FilterOption.objects.filter(             
-                    category=dept_category,                             
-                    name__iexact='other'                                
-                ).first()                                               
-                                                                         
-                # If user selected "Other"...                          
-                if other_option and role_name.lower() != 'other':       
-                    data['role'] = FilterOption.objects.create(        
-                        category=dept_category,                         
-                        slug=role_slug,                                
-                        name=role_name,                                 
-                        is_active=False                                 
-                    )                                                    
-                else:                                                    
-                    data['role'] = FilterOption.objects.create(         
-                        category=dept_category,                         
-                        slug=role_slug,                                 
-                        name=role_name,                                 
-                        is_active=True                                  
-                    )                                                    
-
-        religion_name = data.get('religion')
-        if religion_name and not isinstance(religion_name, FilterOption):
-            religion_slug = religion_name.lower().replace(' ', '-')
-            try:
-                data['religion'] = FilterOption.objects.get(category=religion_category, slug=religion_slug)
-            except FilterOption.DoesNotExist:
-                # Check if "Other" option exists
+        # ========== HANDLE ROLE ==========
+        role_value = data.get('role')
+        if role_value and not isinstance(role_value, FilterOption):
+            role_slug = role_value.lower().replace(' ', '-')
+            
+            # Check if ANY FilterOption with this slug exists (approved or not)
+            role = FilterOption.objects.filter(
+                category=dept_category,
+                slug=role_slug
+            ).first()
+            
+            if role:
+                # Use existing FilterOption
+                data['role'] = role
+            else:
+                # Role doesn't exist, check if "Other" option exists
                 other_option = FilterOption.objects.filter(
-                    category=religion_category,
-                    name__iexact='other'
+                    category=dept_category,
+                    name__iexact='other',
+                    is_approved=True
                 ).first()
                 
-                if other_option and religion_name.lower() != 'other':
-                    data['religion'] = FilterOption.objects.create(
-                        category=religion_category,
-                        slug=religion_slug,
-                        name=religion_name,
-                        is_active=False
+                if other_option and role_value.lower() != 'other':
+                    # Custom role - create as UNAPPROVED
+                    data['role'] = FilterOption.objects.create(
+                        category=dept_category,
+                        slug=role_slug,
+                        name=role_value,
+                        is_active=False,
+                        is_approved=False,
+                        submitted_by=self.context['request'].user,
+                        submitted_at=timezone.now()
                     )
                 else:
+                    # Pre-defined option - create as APPROVED
+                    data['role'] = FilterOption.objects.create(
+                        category=dept_category,
+                        slug=role_slug,
+                        name=role_value,
+                        is_active=True,
+                        is_approved=True
+                    )
+
+        # ========== HANDLE RELIGION ==========
+        religion_value = data.get('religion')
+        if religion_value and not isinstance(religion_value, FilterOption):
+            religion_slug = religion_value.lower().replace(' ', '-')
+            
+            # Check if ANY FilterOption with this slug exists (approved or not)
+            religion = FilterOption.objects.filter(
+                category=religion_category,
+                slug=religion_slug
+            ).first()
+            
+            if religion:
+                # Use existing FilterOption
+                data['religion'] = religion
+            else:
+                # Religion doesn't exist, check if "Other" option exists
+                other_option = FilterOption.objects.filter(
+                    category=religion_category,
+                    name__iexact='other',
+                    is_approved=True
+                ).first()
+                
+                if other_option and religion_value.lower() != 'other':
+                    # Custom religion - create as UNAPPROVED
                     data['religion'] = FilterOption.objects.create(
                         category=religion_category,
                         slug=religion_slug,
-                        name=religion_name,
-                        is_active=True
+                        name=religion_value,
+                        is_active=False,
+                        is_approved=False,
+                        submitted_by=self.context['request'].user,
+                        submitted_at=timezone.now()
+                    )
+                else:
+                    # Pre-defined option - create as APPROVED
+                    data['religion'] = FilterOption.objects.create(
+                        category=religion_category,
+                        slug=religion_slug,
+                        name=religion_value,
+                        is_active=True,
+                        is_approved=True
                     )
 
-        country_name = data.get('country', 'India')
-        if not isinstance(country_name, FilterOption):
-            country_slug = country_name.lower().replace(' ', '-')
-            try:
-                country = FilterOption.objects.get(category=country_category, slug=country_slug)
-            except FilterOption.DoesNotExist:
+        # ========== HANDLE COUNTRY ==========
+        country_value = data.get('country', 'India')
+        if not isinstance(country_value, FilterOption):
+            country_slug = country_value.lower().replace(' ', '-')
+            
+            # Check if country exists
+            country = FilterOption.objects.filter(
+                category=country_category,
+                slug=country_slug
+            ).first()
+            
+            if not country:
                 country = FilterOption.objects.create(
                     category=country_category,
                     slug=country_slug,
-                    name=country_name,
-                    is_active=True
+                    name=country_value,
+                    is_active=True,
+                    is_approved=True
                 )
+            
             data['country'] = country
+        else:
+            data['country'] = country_value
 
-        state_name = data.get('state')
+        # ========== HANDLE STATE ==========
+        state_value = data.get('state')
         state = None
-        if state_name and not isinstance(state_name, FilterOption):
-            state_slug = state_name.lower().replace(' ', '-')
-            try:
-                state = FilterOption.objects.get(category=state_category, slug=state_slug)
-            except FilterOption.DoesNotExist:
-                # Check if "Other" option exists
+        
+        if state_value and not isinstance(state_value, FilterOption):
+            state_slug = state_value.lower().replace(' ', '-')
+            
+            # Check if state exists
+            state = FilterOption.objects.filter(
+                category=state_category,
+                slug=state_slug
+            ).first()
+            
+            if not state:
+                # State doesn't exist, check if "Other" option exists
                 other_option = FilterOption.objects.filter(
                     category=state_category,
-                    name__iexact='other'
+                    name__iexact='other',
+                    is_approved=True
                 ).first()
                 
-                if other_option and state_name.lower() != 'other':
+                if other_option and state_value.lower() != 'other':
+                    # Custom state - create as UNAPPROVED
                     state = FilterOption.objects.create(
                         category=state_category,
                         slug=state_slug,
-                        name=state_name.title(),
+                        name=state_value.title(),
                         parent=data.get('country'),
-                        is_active=False
+                        is_active=False,
+                        is_approved=False,
+                        submitted_by=self.context['request'].user,
+                        submitted_at=timezone.now()
                     )
                 else:
+                    # Pre-defined option - create as APPROVED
                     state = FilterOption.objects.create(
                         category=state_category,
                         slug=state_slug,
-                        name=state_name.title(),
+                        name=state_value.title(),
                         parent=data.get('country'),
-                        is_active=True
+                        is_active=True,
+                        is_approved=True
                     )
-            data['state'] = state
-        elif isinstance(state_name, FilterOption):
-            state = state_name
-            data['state'] = state
+        elif isinstance(state_value, FilterOption):
+            state = state_value
+        
+        data['state'] = state
 
-
-        city_name = data.get('city')
-        if city_name and state and not isinstance(city_name, FilterOption):
-            city_slug = f"{state.slug}-{city_name.lower().replace(' ', '-')}"
-            try:
-                data['city'] = FilterOption.objects.get(category=city_category, slug=city_slug)
-            except FilterOption.DoesNotExist:
-                # Check if "Other" option exists
+        # ========== HANDLE CITY ==========
+        city_value = data.get('city')
+        if city_value and state and not isinstance(city_value, FilterOption):
+            city_slug = f"{state.slug}-{city_value.lower().replace(' ', '-')}"
+            
+            # Check if city exists
+            city = FilterOption.objects.filter(
+                category=city_category,
+                slug=city_slug
+            ).first()
+            
+            if not city:
+                # City doesn't exist, check if "Other" option exists
                 other_option = FilterOption.objects.filter(
                     category=city_category,
-                    name__iexact='other'
+                    name__iexact='other',
+                    is_approved=True
                 ).first()
                 
-                if other_option and city_name.lower() != 'other':
-                    data['city'] = FilterOption.objects.create(
+                if other_option and city_value.lower() != 'other':
+                    # Custom city - create as UNAPPROVED
+                    city = FilterOption.objects.create(
                         category=city_category,
                         slug=city_slug,
-                        name=city_name.title(),
+                        name=city_value.title(),
                         parent=state,
-                        is_active=False
+                        is_active=False,
+                        is_approved=False,
+                        submitted_by=self.context['request'].user,
+                        submitted_at=timezone.now()
                     )
                 else:
-                    data['city'] = FilterOption.objects.create(
+                    # Pre-defined option - create as APPROVED
+                    city = FilterOption.objects.create(
                         category=city_category,
                         slug=city_slug,
-                        name=city_name.title(),
+                        name=city_value.title(),
                         parent=state,
-                        is_active=True
+                        is_active=True,
+                        is_approved=True
                     )
+            
+            data['city'] = city
+        elif isinstance(city_value, FilterOption):
+            data['city'] = city_value
 
         return data
 
-    def create(self, validated_data):
+
+def create(self, validated_data):
         user = self.context['request'].user
         validated_data['user'] = user
         return super().create(validated_data)
 
-    def update(self, instance, validated_data):
+def update(self, instance, validated_data):
         validated_data = self.validate(validated_data)
         return super().update(instance, validated_data)
 
@@ -681,3 +739,8 @@ class CandidateUpdateSerializer(serializers.ModelSerializer):
     def update(self, instance, validated_data):
         validated_data.pop('user', None)
         return super().update(instance, validated_data)
+    
+class ProfileTipSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ProfileTip
+        fields = ['id', 'title', 'subtitle', 'icon_type', 'instructions', 'display_order']    

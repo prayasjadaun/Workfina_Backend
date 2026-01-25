@@ -526,7 +526,7 @@ def get_filter_options(request):
         # Get specific filter category options with subcategories
         try:
             category = FilterCategory.objects.get(slug=filter_type, is_active=True)
-            queryset = FilterOption.objects.filter(category=category, is_active=True).order_by('display_order', 'name')
+            queryset = FilterOption.objects.filter(category=category, is_active=True,is_approved=True).order_by('display_order', 'name')
             
             if search:
                 queryset = queryset.filter(name__icontains=search)
@@ -1063,12 +1063,13 @@ def get_states(request):
     try:
         state_category = FilterCategory.objects.get(slug='state')
         country_category = FilterCategory.objects.get(slug='country')
-        india = FilterOption.objects.get(category=country_category, slug='india')
+        india = FilterOption.objects.get(category=country_category, slug='india',is_approved=True)
         
         states = FilterOption.objects.filter(
             category=state_category,
             parent=india,
-            is_active=True
+            is_active=True,
+            is_approved=True
         ).order_by('name')
         
         states_data = [
@@ -1101,13 +1102,15 @@ def get_cities(request):
         state = FilterOption.objects.get(
             category=state_category,
             slug=state_slug,
-            is_active=True
+            is_active=True,
+            is_approved=True 
         )
         
         cities = FilterOption.objects.filter(
             category=city_category,
             parent=state,
-            is_active=True
+            is_active=True,
+            is_approved=True 
         ).order_by('name')
         
         cities_data = [
@@ -1154,6 +1157,7 @@ def save_candidate_step(request):
                 'profile_step': step
             }
         )
+        
         # Get or create profile reminder tracker
         reminder, reminder_created = ProfileStepReminder.objects.get_or_create(
             user=request.user,
@@ -1165,12 +1169,12 @@ def save_candidate_step(request):
         if step > old_step:
             reminder.update_step(step)
             print(f'[DEBUG] Updated profile step from {old_step} to {step} for {request.user.email}')
-                
         
         update_data = {'profile_step': step}
         
-        # Step 1: Personal Information
+        # ========== STEP 1: Personal Information ==========
         if step == 1:
+            # Basic fields
             if request.data.get('first_name'):
                 update_data['first_name'] = request.data.get('first_name')
             if request.data.get('last_name'):
@@ -1201,7 +1205,7 @@ def save_candidate_step(request):
                 update_data['step1_completed'] = True
                 update_data['step1_completed_at'] = timezone.now()
 
-            # Handle role
+            # ========== HANDLE ROLE ==========
             role_value = request.data.get('role')
             if role_value:
                 dept_category, _ = FilterCategory.objects.get_or_create(
@@ -1209,14 +1213,47 @@ def save_candidate_step(request):
                     defaults={'name': 'Department', 'display_order': 1}
                 )
                 role_slug = role_value.lower().replace(' ', '-')
-                role, _ = FilterOption.objects.get_or_create(
+                
+                # Try to get existing approved role
+                role = FilterOption.objects.filter(
                     category=dept_category,
                     slug=role_slug,
-                    defaults={'name': role_value, 'is_active': True}
-                )
-                update_data['role'] = role
-            
-            # Handle religion
+                    # is_approved=True
+                ).first()
+                
+                if not role:
+                    # Role doesn't exist, check if custom or predefined
+                    other_option = FilterOption.objects.filter(
+                        category=dept_category,
+                        name__iexact='other',
+                        is_approved=True
+                    ).first()
+                    
+                    if other_option and role_value.lower() != 'other':
+                        # Custom role - needs approval
+                        role = FilterOption.objects.create(
+                            category=dept_category,
+                            slug=role_slug,
+                            name=role_value,
+                            is_active=False,
+                            is_approved=False,
+                            submitted_by=request.user,
+                            submitted_at=timezone.now()
+                        )
+                    else:
+                        # Pre-defined role - auto approve
+                        role = FilterOption.objects.create(
+                            category=dept_category,
+                            slug=role_slug,
+                            name=role_value,
+                            is_active=True,
+                            is_approved=True
+                        )
+                
+                if role:
+                    update_data['role'] = role
+
+            # ========== HANDLE RELIGION ==========
             religion_value = request.data.get('religion')
             if religion_value:
                 religion_category, _ = FilterCategory.objects.get_or_create(
@@ -1224,14 +1261,47 @@ def save_candidate_step(request):
                     defaults={'name': 'Religion', 'display_order': 2}
                 )
                 religion_slug = religion_value.lower().replace(' ', '-')
-                religion, _ = FilterOption.objects.get_or_create(
+                
+                # Try to get existing approved religion
+                religion = FilterOption.objects.filter(
                     category=religion_category,
                     slug=religion_slug,
-                    defaults={'name': religion_value, 'is_active': True}
-                )
-                update_data['religion'] = religion
-            
-            # Handle location
+                    # is_approved=True
+                ).first()
+                
+                if not religion:
+                    # Religion doesn't exist, check if custom or predefined
+                    other_option = FilterOption.objects.filter(
+                        category=religion_category,
+                        name__iexact='other',
+                        is_approved=True
+                    ).first()
+                    
+                    if other_option and religion_value.lower() != 'other':
+                        # Custom religion - needs approval
+                        religion = FilterOption.objects.create(
+                            category=religion_category,
+                            slug=religion_slug,
+                            name=religion_value,
+                            is_active=False,
+                            is_approved=False,
+                            submitted_by=request.user,
+                            submitted_at=timezone.now()
+                        )
+                    else:
+                        # Pre-defined religion - auto approve
+                        religion = FilterOption.objects.create(
+                            category=religion_category,
+                            slug=religion_slug,
+                            name=religion_value,
+                            is_active=True,
+                            is_approved=True
+                        )
+                
+                if religion:
+                    update_data['religion'] = religion
+
+            # ========== HANDLE LOCATION ==========
             state_value = request.data.get('state')
             city_value = request.data.get('city')
             
@@ -1249,37 +1319,109 @@ def save_candidate_step(request):
                     defaults={'name': 'City', 'display_order': 5}
                 )
                 
+                # Country is always India
                 country, _ = FilterOption.objects.get_or_create(
                     category=country_category,
                     slug='india',
-                    defaults={'name': 'India', 'is_active': True}
+                    defaults={'name': 'India', 'is_active': True, 'is_approved': True}
                 )
                 update_data['country'] = country
                 
                 if state_value:
                     state_slug = state_value.lower().replace(' ', '-')
-                    state, _ = FilterOption.objects.get_or_create(
+                    
+                    # Try to get existing approved state
+                    state = FilterOption.objects.filter(
                         category=state_category,
                         slug=state_slug,
-                        defaults={'name': state_value.title(), 'parent': country, 'is_active': True}
-                    )
-                    update_data['state'] = state
+                        is_approved=True
+                    ).first()
                     
-                    if city_value:
-                        city_slug = f"{state_slug}-{city_value.lower().replace(' ', '-')}"
-                        city, _ = FilterOption.objects.get_or_create(
-                            category=city_category,
-                            slug=city_slug,
-                            defaults={'name': city_value.title(), 'parent': state, 'is_active': True}
-                        )
-                        update_data['city'] = city
+                    if not state:
+                        # State doesn't exist, check if custom or predefined
+                        other_option = FilterOption.objects.filter(
+                            category=state_category,
+                            name__iexact='other',
+                            is_approved=True
+                        ).first()
+                        
+                        if other_option and state_value.lower() != 'other':
+                            # Custom state - needs approval
+                            state = FilterOption.objects.create(
+                                category=state_category,
+                                slug=state_slug,
+                                name=state_value.title(),
+                                parent=country,
+                                is_active=False,
+                                is_approved=False,
+                                submitted_by=request.user,
+                                submitted_at=timezone.now()
+                            )
+                        else:
+                            # Pre-defined state - auto approve
+                            state = FilterOption.objects.create(
+                                category=state_category,
+                                slug=state_slug,
+                                name=state_value.title(),
+                                parent=country,
+                                is_active=True,
+                                is_approved=True
+                            )
+                    
+                    if state:
+                        update_data['state'] = state
+                        
+                        if city_value:
+                            city_slug = f"{state_slug}-{city_value.lower().replace(' ', '-')}"
+                            
+                            # Try to get existing approved city
+                            city = FilterOption.objects.filter(
+                                category=city_category,
+                                slug=city_slug,
+                                is_approved=True
+                            ).first()
+                            
+                            if not city:
+                                # City doesn't exist, check if custom or predefined
+                                other_option = FilterOption.objects.filter(
+                                    category=city_category,
+                                    name__iexact='other',
+                                    is_approved=True
+                                ).first()
+                                
+                                if other_option and city_value.lower() != 'other':
+                                    # Custom city - needs approval
+                                    city = FilterOption.objects.create(
+                                        category=city_category,
+                                        slug=city_slug,
+                                        name=city_value.title(),
+                                        parent=state,
+                                        is_active=False,
+                                        is_approved=False,
+                                        submitted_by=request.user,
+                                        submitted_at=timezone.now()
+                                    )
+                                else:
+                                    # Pre-defined city - auto approve
+                                    city = FilterOption.objects.create(
+                                        category=city_category,
+                                        slug=city_slug,
+                                        name=city_value.title(),
+                                        parent=state,
+                                        is_active=True,
+                                        is_approved=True
+                                    )
+                            
+                            if city:
+                                update_data['city'] = city
             
+            # Handle profile image
             if 'profile_image' in request.FILES:
                 update_data['profile_image'] = request.FILES['profile_image']
         
-        # Step 2: Work Experience
+        # ========== STEP 2: Work Experience ==========
         elif step == 2:
-            # Handle joining availability (can be saved without work experience)
+            # Handle joining availability
             if request.data.get('joining_availability'):
                 update_data['joining_availability'] = request.data.get('joining_availability')
             if request.data.get('notice_period_details'):
@@ -1294,18 +1436,18 @@ def save_candidate_step(request):
 
                 for exp_data in work_exp_list:
                     is_gap = exp_data.get('is_gap_period', False)
-                    print(f"[DEBUG] Processing entry - is_gap: {is_gap}")  
+                    
                     WorkExperience.objects.create(
                         candidate=candidate,
-                        company_name=exp_data.get('company_name', '')if not is_gap else '',
-                        role_title=exp_data.get('role_title', '')if not is_gap else '',
+                        company_name=exp_data.get('company_name', '') if not is_gap else '',
+                        role_title=exp_data.get('role_title', '') if not is_gap else '',
                         start_date=f"{exp_data.get('start_year')}-{_month_to_number(exp_data.get('start_month'))}-01",
                         end_date=f"{exp_data.get('end_year')}-{_month_to_number(exp_data.get('end_month'))}-01" if not exp_data.get('is_current') and exp_data.get('end_year') else None,
                         is_current=exp_data.get('is_current', False),
                         current_ctc=float(exp_data.get('ctc', 0)) if exp_data.get('ctc') else None,
-                        location=exp_data.get('location', '')if not is_gap else '',
-                        description=exp_data.get('description', '')if not is_gap else '',
-                        is_gap_period=is_gap,  # ✅ ADD THIS
+                        location=exp_data.get('location', '') if not is_gap else '',
+                        description=exp_data.get('description', '') if not is_gap else '',
+                        is_gap_period=is_gap,
                         gap_reason=exp_data.get('gap_reason', '') if is_gap else None,
                     )
 
@@ -1314,24 +1456,21 @@ def save_candidate_step(request):
             total_months = 0
             for exp in candidate.work_experiences.all():
                 start_date = exp.start_date
-                end_date = exp.end_date if exp.end_date else datetime.now()
+                end_date = exp.end_date if exp.end_date else datetime.now().date()
                 
-                # Calculate total months between start and end
                 months_diff = ((end_date.year - start_date.year) * 12) + (end_date.month - start_date.month)
                 total_months += months_diff
 
-            # Convert total months to years (integer division)
             total_years = total_months // 12
-
             if total_years > 0:
                 update_data['experience_years'] = total_years
 
-            # Mark step 2 as completed ONLY if work experience was added
+            # Mark step 2 as completed
             if not candidate.step2_completed and candidate.work_experiences.exists():
                 update_data['step2_completed'] = True
                 update_data['step2_completed_at'] = timezone.now()
         
-        # Step 3: Education + Skills
+        # ========== STEP 3: Education + Skills ==========
         elif step == 3:
             if request.data.get('skills'):
                 update_data['skills'] = request.data.get('skills')
@@ -1361,45 +1500,44 @@ def save_candidate_step(request):
                 update_data['step3_completed'] = True
                 update_data['step3_completed_at'] = timezone.now()
 
-        # Step 4: Documents
+        # ========== STEP 4: Documents ==========
         elif step == 4:
-            update_data['is_profile_completed'] = True
-            reminder.is_profile_completed = True
-            reminder.save()
+            has_agreed = request.data.get('has_agreed_to_declaration')
+            if has_agreed == 'true' or has_agreed is True:
+                update_data['has_agreed_to_declaration'] = True
+                update_data['declaration_agreed_at'] = timezone.now()
+                
+                # Mark step 4 as completed
+                if not candidate.step4_completed:
+                    update_data['step4_completed'] = True
+                    update_data['step4_completed_at'] = timezone.now()
 
-        has_agreed = request.data.get('has_agreed_to_declaration')
-        if has_agreed == 'true' or has_agreed is True:
-            update_data['has_agreed_to_declaration'] = True
-            update_data['declaration_agreed_at'] = timezone.now()
-            # Mark step 4 as completed
-            if not candidate.step4_completed:
-                update_data['step4_completed'] = True
-                update_data['step4_completed_at'] = timezone.now()
-
-            # Send profile completion notification
-            try:
-                WorkfinaFCMService.send_to_user(
-                    user=request.user,
-                    title="🎉 Profile Completed!",
-                    body="Great! Your profile is now complete. You're ready to connect with top recruiters!",
-                    notification_type='COMPLETE_PROFILE',
-                    data={
-                        'profile_completed': True,
-                        'step': step,
-                        'action': 'profile_complete'
-                    }
-                )
-                print(f'[DEBUG] Sent profile completion notification to {request.user.email}')
-            except Exception as e:
-                print(f'[DEBUG] Failed to send profile completion notification: {str(e)}')
+                # Send notification
+                try:
+                    WorkfinaFCMService.send_to_user(
+                        user=request.user,
+                        title="🎉 Profile Completed!",
+                        body="Great! Your profile is now complete. You're ready to connect with top recruiters!",
+                        notification_type='COMPLETE_PROFILE',
+                        data={
+                            'profile_completed': True,
+                            'step': step,
+                            'action': 'profile_complete'
+                        }
+                    )
+                except Exception as e:
+                    print(f'[DEBUG] Failed to send notification: {str(e)}')
 
             if 'resume' in request.FILES:
                 update_data['resume'] = request.FILES['resume']
             if 'video_intro' in request.FILES:
                 update_data['video_intro'] = request.FILES['video_intro']
+            
             update_data['is_profile_completed'] = True
+            reminder.is_profile_completed = True
+            reminder.save()
         
-        # Update candidate
+        # ========== UPDATE CANDIDATE ==========
         for field, value in update_data.items():
             setattr(candidate, field, value)
         candidate.save()
@@ -1415,6 +1553,8 @@ def save_candidate_step(request):
         })
         
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         return Response({'error': f'Failed to save step: {str(e)}'}, status=500)
     
 
@@ -1433,12 +1573,14 @@ def get_public_filter_options(request):
         
         departments = FilterOption.objects.filter(
             category=dept_category, 
-            is_active=True
+            is_active=True,
+            is_approved=True
         ).order_by('display_order', 'name')
         
         religions = FilterOption.objects.filter(
             category=religion_category,
-            is_active=True
+            is_active=True,
+            is_approved=True
         ).order_by('display_order', 'name')
 
         skills = FilterOption.objects.filter(
@@ -1448,7 +1590,8 @@ def get_public_filter_options(request):
         
         languages = FilterOption.objects.filter(
             category=languages_category,
-            is_active=True
+            is_active=True,
+            is_approved=True
         ).order_by('display_order', 'name')
 
         
@@ -1464,7 +1607,9 @@ def get_public_filter_options(request):
         return Response({
             'success': True,
             'departments': [],
-            'religions': []
+            'religions': [],
+            'skills': [],
+            'languages': []
         })
         
 @api_view(['GET'])
@@ -1793,5 +1938,37 @@ def update_candidate_hiring_status(request, candidate_id):
             'error': 'Candidate not found'
         }, status=404)        
     
-
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_profile_tips(request):
+    """Get active profile tips for candidate dashboard"""
+    
+    if request.user.role != 'candidate':
+        return Response({
+            'error': 'Only candidates can access profile tips'
+        }, status=status.HTTP_403_FORBIDDEN)
+    
+    try:
+        tips = ProfileTip.objects.filter(is_active=True).order_by('display_order')
+        
+        tips_data = []
+        for tip in tips:
+            tips_data.append({
+                'id': str(tip.id),
+                'title': tip.title,
+                'subtitle': tip.subtitle,
+                'icon_type': tip.icon_type,
+                'instructions': tip.instructions,
+                'display_order': tip.display_order
+            })
+        
+        return Response({
+            'success': True,
+            'tips': tips_data
+        })
+        
+    except Exception as e:
+        return Response({
+            'error': f'Failed to load profile tips: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 

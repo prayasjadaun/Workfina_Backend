@@ -16,7 +16,9 @@ class EducationInline(admin.TabularInline):
 class FilterOptionInline(admin.TabularInline):
     model = FilterOption
     extra = 1
-    fields = ['name', 'slug', 'parent', 'icon', 'display_order', 'is_active']
+    fields = ['name', 'slug', 'parent', 'icon', 'display_order', 'is_active','is_approved', 'submitted_by', 'submitted_at']
+    readonly_fields = ['submitted_by', 'submitted_at']  
+
     can_delete = True
     max_num = 100  # Limit to 100 items for performance
 
@@ -319,3 +321,80 @@ class HiringAvailabilityUIAdmin(admin.ModelAdmin):
             HiringAvailabilityUI.objects.filter(is_active=True).exclude(pk=obj.pk).update(is_active=False)
         super().save_model(request, obj, form, change)
 
+
+# ✅ YE PURA SECTION ADD KARO
+@admin.register(FilterOption)
+class FilterOptionAdmin(admin.ModelAdmin):
+    list_display = [
+        'name', 'category', 'approval_badge', 'is_active', 
+        'submitted_by', 'submitted_at', 'created_at'
+    ]
+    list_filter = ['is_approved', 'is_active', 'category', 'submitted_at']
+    search_fields = ['name', 'submitted_by__email']
+    readonly_fields = ['submitted_by', 'submitted_at', 'approved_by', 'approved_at']
+    actions = ['approve_options', 'reject_options']
+    
+    fieldsets = (
+        ('Basic Information', {
+            'fields': ('category', 'name', 'slug', 'parent', 'icon', 'display_order')
+        }),
+        ('Status', {
+            'fields': ('is_active', 'is_approved')
+        }),
+        ('Submission Details', {
+            'fields': ('submitted_by', 'submitted_at', 'approved_by', 'approved_at'),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    def approval_badge(self, obj):
+        if obj.is_approved:
+            return "✅ Approved"
+        return "⏳ Pending Approval"
+    approval_badge.short_description = 'Status'
+    
+    def approve_options(self, request, queryset):
+        from django.utils import timezone
+        count = 0
+        for option in queryset.filter(is_approved=False):
+            option.is_approved = True
+            option.approved_by = request.user
+            option.approved_at = timezone.now()
+            option.is_active = True
+            option.save()
+            count += 1
+        
+        self.message_user(request, f'{count} option(s) approved successfully.')
+    approve_options.short_description = '✅ Approve selected options'
+    
+    def reject_options(self, request, queryset):
+        count = queryset.filter(is_approved=False).update(is_active=False, is_approved=False)
+        self.message_user(request, f'{count} option(s) rejected.')
+    reject_options.short_description = '❌ Reject selected options'
+
+
+@admin.register(ProfileTip)
+class ProfileTipAdmin(admin.ModelAdmin):
+    list_display = ['title', 'subtitle', 'display_order', 'is_active', 'updated_at']
+    list_filter = ['is_active', 'created_at']
+    search_fields = ['title', 'subtitle']
+    ordering = ['display_order', 'title']
+    
+    fieldsets = (
+        ('Tip Information', {
+            'fields': ('title', 'subtitle', 'icon_type')
+        }),
+        ('Instructions', {
+            'fields': ('instructions',),
+            'description': 'Enter instructions as JSON array. Example: ["Go to Edit Profile", "Tap on profile picture", "Choose from gallery"]'
+        }),
+        ('Display Settings', {
+            'fields': ('display_order', 'is_active')
+        }),
+        ('Timestamps', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        })
+    )
+    
+    readonly_fields = ['created_at', 'updated_at']
