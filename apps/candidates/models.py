@@ -4,6 +4,8 @@ from django.db.models.signals import pre_save
 from django.dispatch import receiver
 from django.core.exceptions import ValidationError
 import uuid
+from django.conf import settings  
+
 from apps.recruiters.models import HRProfile
 
 User = get_user_model()
@@ -54,17 +56,47 @@ class FilterOption(models.Model):
     icon = models.FileField(upload_to='filter_option_icons/', blank=True, null=True, validators=[validate_icon_file])
     display_order = models.PositiveIntegerField(default=0)
     is_active = models.BooleanField(default=True)
+    is_approved = models.BooleanField(
+        default=True,
+        help_text="Admin approval for custom 'Other' options"
+    )
+    submitted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True, 
+        related_name='submitted_filter_options',
+        help_text="User who submitted this custom option"
+    )
+    submitted_at = models.DateTimeField(
+        null=True, 
+        blank=True, 
+        help_text="When this option was submitted"
+    )
+    approved_at = models.DateTimeField(
+        null=True, 
+        blank=True, 
+        help_text="When this option was approved"
+    )
+    approved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='approved_filter_options',
+        help_text="Admin who approved this option"
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
-    
-    
     
     class Meta:
         ordering = ['display_order', 'name']
         unique_together = ['category', 'slug']
-    
-    def __str__(self):
-     return self.name.title()
 
+    def __str__(self):
+     approval_status = "✅" if self.is_approved else "⏳"
+     return self.name.title()
+    
 
 class Candidate(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -378,5 +410,35 @@ class HiringAvailabilityUI(models.Model):
         super().save(*args, **kwargs)
 
 
-        # In models.py (you can create a new app or add to an existing one)
 
+
+class ProfileTip(models.Model):
+    """Dynamic Profile Tips for Candidate Dashboard"""
+    
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    title = models.CharField(max_length=200, help_text="Tip title")
+    subtitle = models.CharField(max_length=300, help_text="Short description")
+    icon_type = models.CharField(
+        max_length=50, 
+        default='photo_camera_outlined',
+        help_text="Material Icon name"
+    )
+    
+    # Instructions as JSON array
+    instructions = models.JSONField(
+        help_text="Array of instruction steps. Example: ['Step 1', 'Step 2']"
+    )
+    
+    display_order = models.PositiveIntegerField(default=0, help_text="Order to display tips")
+    is_active = models.BooleanField(default=True, help_text="Show/hide this tip")
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['display_order', 'created_at']
+        verbose_name = "Profile Tip"
+        verbose_name_plural = "Profile Tips"
+    
+    def __str__(self):
+        return f"{self.title} (Order: {self.display_order})"
