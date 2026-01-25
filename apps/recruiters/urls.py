@@ -16,8 +16,8 @@ urlpatterns = [
 
     # Company search/autocomplete endpoints
     path('companies/search/', search_companies, name='search-companies'),
-    path('companies/search-by-website/', search_companies_by_website, name='search-companies-by-website'),
     path('companies/check-location/', check_company_location, name='check-company-location'),
+    path('companies/search-by-website/', search_companies_by_website, name='search-companies-by-website'),
 
     # Location dropdown endpoints
     path('locations/cities/', get_cities, name='get-cities'),

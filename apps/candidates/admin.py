@@ -36,6 +36,61 @@ class FilterCategoryAdmin(admin.ModelAdmin):
     option_count.short_description = 'Number of Options'
 
 
+# Custom proxy model for pending locations
+class PendingFilterOption(FilterOption):
+    class Meta:
+        proxy = True
+        verbose_name = "Pending Location"
+        verbose_name_plural = "📋 Pending Locations"
+
+
+@admin.register(PendingFilterOption)
+class PendingFilterOptionAdmin(admin.ModelAdmin):
+    list_display = ['name', 'category', 'parent_info', 'created_at', 'approve_button']
+    list_filter = ['category', 'created_at']
+    search_fields = ['name', 'slug']
+    ordering = ['-created_at']
+    raw_id_fields = ['parent']
+
+    def parent_info(self, obj):
+        return obj.parent.name if obj.parent else '-'
+    parent_info.short_description = 'Parent'
+
+    # Only show pending locations
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        qs = qs.filter(is_active=False)
+        return qs
+
+    # Show approve button
+    def approve_button(self, obj):
+        from django.utils.html import format_html
+        return format_html(
+            '<a class="button" href="#" onclick="approveLocation({}); return false;" style="background-color: #417690; color: white; padding: 5px 10px; border-radius: 3px; text-decoration: none;">✅ Approve</a>',
+            obj.pk
+        )
+    approve_button.short_description = 'Action'
+    approve_button.allow_tags = True
+
+    actions = ['approve_locations', 'reject_locations']
+
+    def approve_locations(self, request, queryset):
+        count = queryset.update(is_active=True)
+        self.message_user(request, f'{count} location(s) approved successfully!', level='success')
+    approve_locations.short_description = '✅ Approve selected locations'
+
+    def reject_locations(self, request, queryset):
+        count = queryset.delete()[0]
+        self.message_user(request, f'{count} location(s) rejected and deleted.', level='warning')
+    reject_locations.short_description = '❌ Reject and delete selected'
+
+    def has_add_permission(self, request):
+        return False
+
+    def get_readonly_fields(self, request, obj=None):
+        return ['name', 'category', 'parent', 'slug', 'created_at']
+
+
 class CandidateAdminForm(forms.ModelForm):
     class Meta:
         model = Candidate
