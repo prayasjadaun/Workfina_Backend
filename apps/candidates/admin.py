@@ -5,8 +5,12 @@ from .models import *
 class WorkExperienceInline(admin.TabularInline):
     model = WorkExperience
     extra = 1
-    fields = ['company_name', 'role_title', 'start_date', 'end_date', 'is_current', 'location','current_ctc', 'description','is_gap_period', 
-        'gap_reason']
+    fields = ['company_name', 'role_title', 'start_date', 'end_date', 'is_current', 'location','current_ctc', 'description']
+
+class CareerGapInline(admin.TabularInline):
+    model = CareerGap
+    extra = 1
+    fields = ['start_date', 'end_date', 'gap_reason']
 
 class EducationInline(admin.TabularInline):
     model = Education
@@ -129,13 +133,14 @@ class CandidateAdminForm(forms.ModelForm):
 @admin.register(Candidate)
 class CandidateAdmin(admin.ModelAdmin):
     form = CandidateAdminForm
-    list_display = ['user', 'masked_name','first_name', 'last_name', 'role', 'experience_years', 'city', 'age', 'is_active', 'is_available_for_hiring']
-    list_filter = ['role__category', 'religion', 'state', 'is_active', 'is_available_for_hiring', 'experience_years','joining_availability']
+    list_display = ['user', 'masked_name','first_name', 'last_name', 'role', 'experience_years', 'city', 'age', 'is_verified', 'is_active', 'is_available_for_hiring']
+    list_filter = ['is_verified', 'role__category', 'religion', 'state', 'is_active', 'is_available_for_hiring', 'experience_years','joining_availability']
     search_fields = ['first_name', 'last_name', 'masked_name', 'user__email', 'skills','notice_period_details']
     readonly_fields = ['masked_name', 'created_at', 'updated_at', 'last_availability_update','declaration_agreed_at']
     raw_id_fields = ['user']
-    inlines = [WorkExperienceInline, EducationInline]
-    
+    inlines = [WorkExperienceInline, CareerGapInline, EducationInline]
+    actions = ['verify_candidates', 'unverify_candidates']
+
     fieldsets = (
         ('User Account', {
             'fields': ('user',)
@@ -146,7 +151,7 @@ class CandidateAdmin(admin.ModelAdmin):
         ('Professional', {
             'fields': ('role', 'experience_years', 'skills')
         }),
-        ('Availability', { 
+        ('Availability', {
             'fields': ('joining_availability', 'notice_period_details')
         }),
         ('Personal', {
@@ -159,9 +164,19 @@ class CandidateAdmin(admin.ModelAdmin):
             'fields': ('resume', 'video_intro', 'profile_image')
         }),
         ('Status', {
-            'fields': ('is_active', 'is_available_for_hiring', 'last_availability_update','has_agreed_to_declaration', 'declaration_agreed_at', 'created_at', 'updated_at')
+            'fields': ('is_verified', 'is_active', 'is_available_for_hiring', 'last_availability_update','has_agreed_to_declaration', 'declaration_agreed_at', 'created_at', 'updated_at')
         })
     )
+
+    def verify_candidates(self, request, queryset):
+        count = queryset.update(is_verified=True)
+        self.message_user(request, f'{count} candidate(s) verified successfully.')
+    verify_candidates.short_description = '✅ Verify selected candidates'
+
+    def unverify_candidates(self, request, queryset):
+        count = queryset.update(is_verified=False)
+        self.message_user(request, f'{count} candidate(s) unverified.')
+    unverify_candidates.short_description = '❌ Unverify selected candidates'
 
 @admin.register(UnlockHistory)
 class UnlockHistoryAdmin(admin.ModelAdmin):
@@ -259,33 +274,40 @@ class CandidateFollowupAdmin(admin.ModelAdmin):
 
 @admin.register(WorkExperience)
 class WorkExperienceAdmin(admin.ModelAdmin):
-    list_display = ['candidate', 'company_name', 'role_title','current_ctc','start_date', 'end_date', 'is_current','is_gap_period', 'gap_type_display']
-    list_filter = ['is_current', 'start_date','is_gap_period']
-    search_fields = ['candidate__masked_name', 'company_name', 'role_title','gap_reason']
+    list_display = ['candidate', 'company_name', 'role_title','current_ctc','start_date', 'end_date', 'is_current']
+    list_filter = ['is_current', 'start_date']
+    search_fields = ['candidate__masked_name', 'company_name', 'role_title']
     raw_id_fields = ['candidate']
 
-    def gap_type_display(self, obj):
-        if obj.is_gap_period:
-            return "🔴 GAP"
-        return "🟢 WORK"
-    gap_type_display.short_description = 'Type'
-    
     fieldsets = (
         ('Basic Info', {
-            'fields': ('candidate', 'is_gap_period')
+            'fields': ('candidate',)
         }),
         ('Work Details', {
             'fields': ('company_name', 'role_title', 'location', 'current_ctc', 'description'),
-            'classes': ('collapse',) if True else (),  # Can be collapsed if is_gap_period
-        }),
-        ('Gap Details', {
-            'fields': ('gap_reason',),
-            'classes': ('collapse',),
         }),
         ('Timeline', {
             'fields': ('start_date', 'end_date', 'is_current')
         }),
     )
+
+@admin.register(CareerGap)
+class CareerGapAdmin(admin.ModelAdmin):
+    list_display = ['candidate', 'start_date', 'end_date', 'gap_duration', 'gap_reason_preview']
+    list_filter = ['start_date', 'end_date']
+    search_fields = ['candidate__masked_name', 'gap_reason']
+    raw_id_fields = ['candidate']
+
+    def gap_duration(self, obj):
+        if obj.start_date and obj.end_date:
+            months = ((obj.end_date.year - obj.start_date.year) * 12) + (obj.end_date.month - obj.start_date.month)
+            return f"{months} months"
+        return "-"
+    gap_duration.short_description = 'Duration'
+
+    def gap_reason_preview(self, obj):
+        return obj.gap_reason[:50] + '...' if len(obj.gap_reason) > 50 else obj.gap_reason
+    gap_reason_preview.short_description = 'Reason'
 
 # @admin.register(Education)  # Removed from sidebar - accessible via Candidate inline
 class EducationAdmin(admin.ModelAdmin):

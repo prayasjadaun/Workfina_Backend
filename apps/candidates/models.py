@@ -168,6 +168,7 @@ class Candidate(models.Model):
 
     # Meta Information
     is_active = models.BooleanField(default=True)
+    is_verified = models.BooleanField(default=False, help_text="Admin approval for candidate profile")
     is_available_for_hiring = models.BooleanField(default=True, help_text="Is candidate currently available for hiring opportunities")
     last_availability_update = models.DateTimeField(null=True, blank=True, help_text="Last time candidate updated their availability status")
     created_at = models.DateTimeField(auto_now_add=True)
@@ -231,7 +232,7 @@ class WorkExperience(models.Model):
     company_name = models.CharField(max_length=255)
     role_title = models.CharField(max_length=255)
     start_date = models.DateField()
-    end_date = models.DateField(null=True, blank=True)  
+    end_date = models.DateField(null=True, blank=True)
     is_current = models.BooleanField(default=False)
     current_ctc = models.DecimalField(
         max_digits=10,
@@ -242,14 +243,26 @@ class WorkExperience(models.Model):
     location = models.CharField(max_length=255, blank=True)
     description = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
-    is_gap_period = models.BooleanField(default=False, help_text="True if this is a career gap")
-    gap_reason = models.TextField(blank=True, null=True, help_text="Reason for career gap")
-    
+
     class Meta:
         ordering = ['-start_date']
-    
+
     def __str__(self):
         return f"{self.candidate.masked_name} - {self.role_title} at {self.company_name}"
+
+class CareerGap(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    candidate = models.ForeignKey(Candidate, on_delete=models.CASCADE, related_name='career_gaps')
+    start_date = models.DateField()
+    end_date = models.DateField()
+    gap_reason = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-start_date']
+
+    def __str__(self):
+        return f"{self.candidate.masked_name} - Gap from {self.start_date} to {self.end_date}"
 
 class Education(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)

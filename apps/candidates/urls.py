@@ -19,14 +19,17 @@ urlpatterns = [
     path('<uuid:candidate_id>/followup/', add_candidate_followup, name='add-candidate-followup'),
     path('<uuid:candidate_id>/followup/<uuid:followup_id>/', add_candidate_followup, name='delete-candidate-followup'),
     path('<uuid:candidate_id>/notes-followups/', get_candidate_notes_followups, name='get-candidate-notes-followups'),
-    path('locations/states/', get_states, name='get-states'),
-    path('locations/cities/', get_cities, name='get-cities'),
+    # Location search endpoints
+    path('locations/search/countries/', search_countries, name='search-countries'),
+    path('locations/search/states/', search_states, name='search-states'),
+    path('locations/search/cities/', search_cities, name='search-cities'),
+    
     path('save-step/', save_candidate_step, name='save-candidate-step'),
     path('public/filter-options/', get_public_filter_options, name='public-filter-options'),
     path('profile-tips/', get_profile_tips, name='profile-tips'),
 
-    
 
 
-    
+
+
 ]

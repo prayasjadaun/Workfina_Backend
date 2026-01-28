@@ -674,3 +674,187 @@ def add_custom_location(request):
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def search_countries(request):
+    """
+    Search countries for autocomplete/autosuggest
+    Query params:
+    - q: search query (required)
+    - limit: number of results (optional, default 10)
+
+    Returns:
+    - Countries matching search query
+    - Ordered by name
+    """
+    search_query = request.query_params.get('q', '').strip()
+    limit = int(request.query_params.get('limit', 10))
+
+    if not search_query:
+        return Response({
+            'success': False,
+            'error': 'Search query (q) is required'
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        country_category = FilterCategory.objects.get(slug='country')
+
+        # Search countries by name (case-insensitive partial match)
+        countries = FilterOption.objects.filter(
+            category=country_category,
+            name__icontains=search_query,
+            is_active=True
+        ).order_by('name')[:limit]
+
+        countries_data = [
+            {
+                'id': str(country.id),
+                'name': country.name,
+                'slug': country.slug
+            }
+            for country in countries
+        ]
+
+        return Response({
+            'success': True,
+            'query': search_query,
+            'count': len(countries_data),
+            'countries': countries_data
+        })
+
+    except FilterCategory.DoesNotExist:
+        return Response({
+            'success': False,
+            'error': 'Country category not found'
+        }, status=status.HTTP_404_NOT_FOUND)
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def search_states(request):
+    """
+    Search states for autocomplete/autosuggest
+    Query params:
+    - q: search query (required)
+    - country: country ID (optional - filters states by country)
+    - limit: number of results (optional, default 10)
+
+    Returns:
+    - States matching search query
+    - Ordered by name
+    """
+    search_query = request.query_params.get('q', '').strip()
+    country_id = request.query_params.get('country', '').strip()
+    limit = int(request.query_params.get('limit', 10))
+
+    if not search_query:
+        return Response({
+            'success': False,
+            'error': 'Search query (q) is required'
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        state_category = FilterCategory.objects.get(slug='state')
+
+        # Build query
+        query_filter = {
+            'category': state_category,
+            'name__icontains': search_query,
+            'is_active': True
+        }
+
+        # Filter by country if provided
+        if country_id:
+            query_filter['parent_id'] = country_id
+
+        # Search states by name (case-insensitive partial match)
+        states = FilterOption.objects.filter(**query_filter).order_by('name')[:limit]
+
+        states_data = [
+            {
+                'id': str(state.id),
+                'name': state.name,
+                'slug': state.slug,
+                'country_id': str(state.parent_id) if state.parent_id else None
+            }
+            for state in states
+        ]
+
+        return Response({
+            'success': True,
+            'query': search_query,
+            'count': len(states_data),
+            'states': states_data
+        })
+
+    except FilterCategory.DoesNotExist:
+        return Response({
+            'success': False,
+            'error': 'State category not found'
+        }, status=status.HTTP_404_NOT_FOUND)
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def search_cities(request):
+    """
+    Search cities for autocomplete/autosuggest
+    Query params:
+    - q: search query (required)
+    - state: state ID (optional - filters cities by state)
+    - limit: number of results (optional, default 10)
+
+    Returns:
+    - Cities matching search query
+    - Ordered by name
+    """
+    search_query = request.query_params.get('q', '').strip()
+    state_id = request.query_params.get('state', '').strip()
+    limit = int(request.query_params.get('limit', 10))
+
+    if not search_query:
+        return Response({
+            'success': False,
+            'error': 'Search query (q) is required'
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        city_category = FilterCategory.objects.get(slug='city')
+
+        # Build query
+        query_filter = {
+            'category': city_category,
+            'name__icontains': search_query,
+            'is_active': True
+        }
+
+        # Filter by state if provided
+        if state_id:
+            query_filter['parent_id'] = state_id
+
+        # Search cities by name (case-insensitive partial match)
+        cities = FilterOption.objects.filter(**query_filter).order_by('name')[:limit]
+
+        cities_data = [
+            {
+                'id': str(city.id),
+                'name': city.name,
+                'slug': city.slug,
+                'state_id': str(city.parent_id) if city.parent_id else None
+            }
+            for city in cities
+        ]
+
+        return Response({
+            'success': True,
+            'query': search_query,
+            'count': len(cities_data),
+            'cities': cities_data
+        })
+
+    except FilterCategory.DoesNotExist:
+        return Response({
+            'success': False,
+            'error': 'City category not found'
+        }, status=status.HTTP_404_NOT_FOUND)
+

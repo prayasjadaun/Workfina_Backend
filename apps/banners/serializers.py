@@ -6,7 +6,16 @@ class BannerSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Banner
-        fields = ['id', 'title', 'button_text', 'image']
+        fields = [
+            'id', 'title', 'button_text', 'image', 'height',
+            'title_font_size', 'title_color', 'title_font_weight',
+            'button_bg_color', 'button_text_color', 'button_font_size',
+            'button_font_weight', 'button_border_radius',
+            'button_padding_horizontal', 'button_padding_vertical',
+            'gradient_start_color', 'gradient_start_opacity',
+            'gradient_end_color', 'gradient_end_opacity',
+            'content_alignment', 'content_padding', 'border_radius'
+        ]
 
     def get_image(self, obj):
         request = self.context.get('request')

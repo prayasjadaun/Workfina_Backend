@@ -1,15 +1,37 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
-from .models import Candidate, ProfileTip, UnlockHistory, FilterCategory, FilterOption, CandidateNote, CandidateFollowup, WorkExperience, Education
+from .models import Candidate, ProfileTip, UnlockHistory, FilterCategory, FilterOption, CandidateNote, CandidateFollowup, WorkExperience, Education, CareerGap
 from django.utils import timezone
 import pytz
 
 User = get_user_model()
 
 class WorkExperienceSerializer(serializers.ModelSerializer):
+    company_logo = serializers.SerializerMethodField()
+
     class Meta:
         model = WorkExperience
-        fields = ['id', 'company_name', 'role_title', 'start_date', 'end_date', 'is_current', 'current_ctc','location', 'description','is_gap_period','gap_reason' ]
+        fields = ['id', 'company_name', 'company_logo', 'role_title', 'start_date', 'end_date', 'is_current', 'current_ctc','location', 'description']
+
+    def get_company_logo(self, obj):
+        """Get company logo from Company model if exists"""
+        from apps.recruiters.models import Company
+
+        try:
+            company = Company.objects.get(name__iexact=obj.company_name)
+            if company.logo:
+                request = self.context.get('request')
+                if request:
+                    return request.build_absolute_uri(company.logo.url)
+                return company.logo.url
+        except Company.DoesNotExist:
+            pass
+        return None
+
+class CareerGapSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CareerGap
+        fields = ['id', 'start_date', 'end_date', 'gap_reason']
 
 class EducationSerializer(serializers.ModelSerializer):
     class Meta:
@@ -57,13 +79,13 @@ class CandidateRegistrationSerializer(serializers.ModelSerializer):
         'career_objective': {'required': True},
         'joining_availability': {'required': True},
         'notice_period_details': {'required': True},  
-        'resume': {'required': False},
-        'video_intro': {'required': False},
+        'resume': {'required': True},
+        'video_intro': {'required': True},
         'profile_image': {'required': True},
-        'experience_years': {'required': False},
-        'country': {'required': False},
-        'skills': {'required': False},
-        'willing_to_relocate': {'required': False}
+        'experience_years': {'required': True},
+        'country': {'required': True},
+        'skills': {'required': True},
+        'willing_to_relocate': {'required': True}
     }
     
     def validate_willing_to_relocate(self, value):
@@ -352,11 +374,9 @@ class MaskedCandidateSerializer(serializers.ModelSerializer):
         if not work_experiences:
             exp_years = obj.experience_years or 0
             if exp_years == 0:
-                return "0 years"
-            elif exp_years == 1:
-                return "1 year"
+                return "0 Yr"
             else:
-                return f"{exp_years} years"
+                return f"{exp_years} Yr"
         
         total_months = 0
         for exp in work_experiences:
@@ -373,15 +393,13 @@ class MaskedCandidateSerializer(serializers.ModelSerializer):
         
         # Format the output
         if years == 0 and months == 0:
-            return "0 years"
+            return "0 Yr"
         elif years == 0:
-            return f"{months} month{'s' if months != 1 else ''}"
+            return f"{months} Mo"
         elif months == 0:
-            return f"{years} year{'s' if years != 1 else ''}"
+            return f"{years} Yr"
         else:
-            year_text = f"{years} year{'s' if years != 1 else ''}"
-            month_text = f"{months} month{'s' if months != 1 else ''}"
-            return f"{year_text} {month_text}"
+            return f"{years} Yr {months} Mo"
 
 class FullCandidateSerializer(serializers.ModelSerializer):
     skills_list = serializers.SerializerMethodField()
@@ -399,6 +417,7 @@ class FullCandidateSerializer(serializers.ModelSerializer):
     city_name = serializers.CharField(source='city.name', read_only=True)
 
     work_experiences = WorkExperienceSerializer(many=True, read_only=True)
+    career_gaps = CareerGapSerializer(many=True, read_only=True)
     educations = EducationSerializer(many=True, read_only=True)
     experience_years = serializers.SerializerMethodField()
 
@@ -412,9 +431,9 @@ class FullCandidateSerializer(serializers.ModelSerializer):
             'skills', 'skills_list',
             'resume_url', 'video_intro_url', 'profile_image_url', 'credits_used',
             'languages', 'street_address', 'willing_to_relocate', 'career_objective',
-            'work_experiences', 'educations','profile_step', 'is_profile_completed',
+            'work_experiences', 'career_gaps', 'educations','profile_step', 'is_profile_completed',
             'joining_availability', 'notice_period_details',
-            'is_available_for_hiring', 'last_availability_update',
+            'is_verified', 'is_available_for_hiring', 'last_availability_update',
             'has_agreed_to_declaration', 'declaration_agreed_at'
         ]
     
@@ -453,11 +472,9 @@ class FullCandidateSerializer(serializers.ModelSerializer):
         if not work_experiences:
            exp_years = obj.experience_years or 0
            if exp_years == 0:
-               return "0 years"
-           elif exp_years == 1:
-                return "1 year"
+               return "0 Yr"
            else:
-                return f"{exp_years} years"
+                return f"{exp_years} Yr"
         
         total_months = 0
         for exp in work_experiences:
@@ -470,13 +487,13 @@ class FullCandidateSerializer(serializers.ModelSerializer):
         months = total_months % 12
     
         if years == 0 and months == 0:
-           return "0 years"
+           return "0 Yr"
         elif years == 0:
-           return f"{months} month{'s' if months != 1 else ''}"
+           return f"{months} Mo"
         elif months == 0:
-          return f"{years} year{'s' if years != 1 else ''}"
+          return f"{years} Yr"
         else:
-           return f"{years} year{'s' if years != 1 else ''} {months} month{'s' if months != 1 else ''}"
+           return f"{years} Yr {months} Mo"
 
     def get_last_availability_update(self, obj):
         if obj.last_availability_update:

@@ -34,15 +34,7 @@ class CandidateRegistrationView(generics.CreateAPIView):
     parser_classes = [MultiPartParser, FormParser, JSONParser]
 
     def post(self, request, *args, **kwargs):
-        print("=" * 50)
-        print("DEBUG - Registration Request")
-        print("=" * 50)
-        print(f"Request DATA keys: {request.data.keys()}")
-        print(f"Request FILES keys: {request.FILES.keys()}")
-        print(f"Resume in FILES: {'resume' in request.FILES}")
-        print(f"Video intro in FILES: {'video_intro' in request.FILES}")
-        print("=" * 50)
-
+      
         # Check if user is candidate
         if request.user.role != 'candidate':
             return Response({
@@ -55,7 +47,6 @@ class CandidateRegistrationView(generics.CreateAPIView):
                 'error': 'Candidate profile already exists'
             }, status=status.HTTP_400_BAD_REQUEST)
         
-        # ✅ GET WORK EXPERIENCE & EDUCATION DATA
         work_experience_data = request.data.get('work_experience')
         education_data = request.data.get('education')
         
@@ -70,30 +61,34 @@ class CandidateRegistrationView(generics.CreateAPIView):
                     try:
                         import json
                         work_exp_list = json.loads(work_experience_data)
-                        
-                        print("=" * 50)
-                        print("SAVING WORK EXPERIENCES:")
-                        print(json.dumps(work_exp_list, indent=2))
-                        print("=" * 50)
-                        
+
                         for exp_data in work_exp_list:
 
                             is_gap = exp_data.get('is_gap_period', False)
-                            
-                            WorkExperience.objects.create(
-                                candidate=candidate,
-                                company_name=exp_data.get('company_name', '')if not is_gap else '',
-                                role_title=exp_data.get('role_title', '')if not is_gap else '',
-                                start_date=f"{exp_data.get('start_year')}-{_month_to_number(exp_data.get('start_month'))}-01",
-                                end_date=f"{exp_data.get('end_year')}-{_month_to_number(exp_data.get('end_month'))}-01" if not exp_data.get('is_current') and exp_data.get('end_year') else None,
-                                is_current=exp_data.get('is_current', False),
-                                current_ctc=float(exp_data.get('ctc')) if exp_data.get('ctc') and exp_data.get('ctc').strip() else None,  
-                                location=exp_data.get('location', '')if not is_gap else '',
-                                description=exp_data.get('description', '')if not is_gap else '',
-                                is_gap_period=is_gap,                                                 # ADD
-                                gap_reason=exp_data.get('gap_reason', '') if is_gap else None, 
-                            )
-                            print(f"✅ Saved work experience: {exp_data.get('company_name')}")
+
+                            if is_gap:
+                                # Save as CareerGap
+                                CareerGap.objects.create(
+                                    candidate=candidate,
+                                    start_date=f"{exp_data.get('start_year')}-{_month_to_number(exp_data.get('start_month'))}-01",
+                                    end_date=f"{exp_data.get('end_year')}-{_month_to_number(exp_data.get('end_month'))}-01",
+                                    gap_reason=exp_data.get('gap_reason', '')
+                                )
+                                print(f"✅ Saved career gap: {exp_data.get('gap_reason')}")
+                            else:
+                                # Save as WorkExperience
+                                WorkExperience.objects.create(
+                                    candidate=candidate,
+                                    company_name=exp_data.get('company_name', ''),
+                                    role_title=exp_data.get('role_title', ''),
+                                    start_date=f"{exp_data.get('start_year')}-{_month_to_number(exp_data.get('start_month'))}-01",
+                                    end_date=f"{exp_data.get('end_year')}-{_month_to_number(exp_data.get('end_month'))}-01" if not exp_data.get('is_current') and exp_data.get('end_year') else None,
+                                    is_current=exp_data.get('is_current', False),
+                                    current_ctc=float(exp_data.get('ctc')) if exp_data.get('ctc') and exp_data.get('ctc').strip() else None,
+                                    location=exp_data.get('location', ''),
+                                    description=exp_data.get('description', ''),
+                                )
+                                print(f"✅ Saved work experience: {exp_data.get('company_name')}")
                     except Exception as e:
                         print(f"❌ Work experience error: {e}")
                         import traceback
@@ -128,10 +123,10 @@ class CandidateRegistrationView(generics.CreateAPIView):
                         import traceback
                         traceback.print_exc()
                 
-                # Return full profile data with work_experiences and educations
+                # Return full profile data with work_experiences, career_gaps and educations
                 candidate.refresh_from_db()
 
-                candidate = Candidate.objects.prefetch_related('educations', 'work_experiences').get(id=candidate.id)
+                candidate = Candidate.objects.prefetch_related('educations', 'work_experiences', 'career_gaps').get(id=candidate.id)
 
                 serializer = FullCandidateSerializer(candidate, context={'request': request})
                 return Response(serializer.data, status=status.HTTP_201_CREATED)
@@ -374,49 +369,76 @@ def update_candidate_profile(request):
         
         # Handle work experience if provided
         work_experience_data = request.data.get('work_experiences')
+        career_gaps_data = request.data.get('career_gaps')
+
         if work_experience_data:
             candidate.work_experiences.all().delete()
-            
+
             try:
                 import json
-                
-                # ✅ DIRECTLY PARSE JSON - NO REGEX CLEANING
                 work_exp_list = json.loads(work_experience_data)
-                
+
                 print("=" * 80)
                 print("WORK EXPERIENCES RECEIVED:")
                 print(json.dumps(work_exp_list, indent=2))
                 print("=" * 80)
-                
+
                 for i, exp_data in enumerate(work_exp_list, 1):
-                    is_gap = exp_data.get('is_gap_period', False)
-                    print(f"\n--- Creating Experience #{i} ---")
+                    print(f"\n--- Creating Work Experience #{i} ---")
                     print(f"Company: {exp_data.get('company_name')}")
-                    print(f"Role: {exp_data.get('job_role')}")
-                    print(f"Location: '{exp_data.get('location')}'")
-                    print(f"Description: '{exp_data.get('description')}'")
-                    
-                    work_exp = WorkExperience.objects.create(
+                    print(f"Role: {exp_data.get('role_title')}")
+
+                    WorkExperience.objects.create(
                         candidate=candidate,
-                        company_name=exp_data.get('company_name', '')if not is_gap else '',
-                        role_title=exp_data.get('role_title', '')if not is_gap else '',
+                        company_name=exp_data.get('company_name', ''),
+                        role_title=exp_data.get('role_title', ''),
                         start_date=f"{exp_data.get('start_year')}-{_month_to_number(exp_data.get('start_month'))}-01",
                         end_date=f"{exp_data.get('end_year')}-{_month_to_number(exp_data.get('end_month'))}-01" if not exp_data.get('is_current') and exp_data.get('end_year') else None,
                         is_current=exp_data.get('is_current', False),
-                        current_ctc=float(exp_data.get('ctc')) if exp_data.get('ctc') and exp_data.get('ctc').strip() else None,                        location=exp_data.get('location', ''),
-                        description=exp_data.get('description', '')if not is_gap else '',
-                        # location=exp_data.get('location', '') if not is_gap else '',
-                        is_gap_period=is_gap,                                                 # ADD
-                        gap_reason=exp_data.get('gap_reason', '') if is_gap else None,  
+                        current_ctc=float(exp_data.get('ctc')) if exp_data.get('ctc') and exp_data.get('ctc').strip() else None,
+                        location=exp_data.get('location', ''),
+                        description=exp_data.get('description', ''),
                     )
-                    
-                    print(f"✅ Saved - Location: '{work_exp.location}', Description: '{work_exp.description}'")
-                    
+                    print(f"✅ Saved work experience: {exp_data.get('company_name')}")
+
             except json.JSONDecodeError as e:
                 print(f"❌ JSON parsing error: {e}")
                 print(f"Raw data: {work_experience_data}")
             except Exception as e:
                 print(f"❌ Work experience error: {e}")
+                import traceback
+                traceback.print_exc()
+
+        # Handle career gaps if provided
+        if career_gaps_data:
+            candidate.career_gaps.all().delete()
+
+            try:
+                import json
+                career_gaps_list = json.loads(career_gaps_data)
+
+                print("=" * 80)
+                print("CAREER GAPS RECEIVED:")
+                print(json.dumps(career_gaps_list, indent=2))
+                print("=" * 80)
+
+                for i, gap_data in enumerate(career_gaps_list, 1):
+                    print(f"\n--- Creating Career Gap #{i} ---")
+                    print(f"Gap Reason: {gap_data.get('gap_reason')}")
+
+                    CareerGap.objects.create(
+                        candidate=candidate,
+                        start_date=f"{gap_data.get('start_year')}-{_month_to_number(gap_data.get('start_month'))}-01",
+                        end_date=f"{gap_data.get('end_year')}-{_month_to_number(gap_data.get('end_month'))}-01",
+                        gap_reason=gap_data.get('gap_reason', '')
+                    )
+                    print(f"✅ Saved career gap: {gap_data.get('gap_reason')}")
+
+            except json.JSONDecodeError as e:
+                print(f"❌ Career gaps JSON parsing error: {e}")
+                print(f"Raw data: {career_gaps_data}")
+            except Exception as e:
+                print(f"❌ Career gaps error: {e}")
                 import traceback
                 traceback.print_exc()
 
@@ -446,9 +468,10 @@ def update_candidate_profile(request):
             except Exception as e:
                 print(f"Education parsing error: {e}")
         
-        # Remove work_experiences and educations from request.data for candidate update
+        # Remove work_experiences, career_gaps and educations from request.data for candidate update
         candidate_data = request.data.copy()
         candidate_data.pop('work_experiences', None)
+        candidate_data.pop('career_gaps', None)
         candidate_data.pop('educations', None)
         
         # Use the same serializer with the same validation logic
@@ -1057,78 +1080,7 @@ def get_candidate_notes_followups(request, candidate_id):
         }, status=status.HTTP_404_NOT_FOUND)
     
 
-@api_view(['GET'])
-@permission_classes([IsAuthenticated])
-def get_states(request):
-    try:
-        state_category = FilterCategory.objects.get(slug='state')
-        country_category = FilterCategory.objects.get(slug='country')
-        india = FilterOption.objects.get(category=country_category, slug='india',is_approved=True)
-        
-        states = FilterOption.objects.filter(
-            category=state_category,
-            parent=india,
-            is_active=True,
-            is_approved=True
-        ).order_by('name')
-        
-        states_data = [
-            {
-                'id': str(state.id),
-                'name': state.name,
-                'slug': state.slug
-            }
-            for state in states
-        ]
-        
-        return Response({'success': True, 'states': states_data})
-        
-    except FilterCategory.DoesNotExist:
-        return Response({'error': 'Location data not initialized'}, status=404)
 
-
-@api_view(['GET'])
-@permission_classes([IsAuthenticated])
-def get_cities(request):
-    state_slug = request.query_params.get('state')
-    
-    if not state_slug:
-        return Response({'error': 'State parameter is required'}, status=400)
-    
-    try:
-        city_category = FilterCategory.objects.get(slug='city')
-        state_category = FilterCategory.objects.get(slug='state')
-        
-        state = FilterOption.objects.get(
-            category=state_category,
-            slug=state_slug,
-            is_active=True,
-            is_approved=True 
-        )
-        
-        cities = FilterOption.objects.filter(
-            category=city_category,
-            parent=state,
-            is_active=True,
-            is_approved=True 
-        ).order_by('name')
-        
-        cities_data = [
-            {
-                'id': str(city.id),
-                'name': city.name,
-                'slug': city.slug
-            }
-            for city in cities
-        ]
-        
-        return Response({'success': True, 'state': state.name, 'cities': cities_data})
-        
-    except FilterOption.DoesNotExist:
-        return Response({'error': 'State not found'}, status=404)
-    except FilterCategory.DoesNotExist:
-        return Response({'error': 'Location data not initialized'}, status=404)
-    
 @api_view(['POST', 'PATCH'])
 @permission_classes([IsAuthenticated])
 @parser_classes([MultiPartParser, FormParser, JSONParser])
@@ -1430,26 +1382,37 @@ def save_candidate_step(request):
             work_experience_data = request.data.get('work_experience')
             if work_experience_data:
                 candidate.work_experiences.all().delete()
+                candidate.career_gaps.all().delete()
 
                 import json
                 work_exp_list = json.loads(work_experience_data)
 
                 for exp_data in work_exp_list:
                     is_gap = exp_data.get('is_gap_period', False)
-                    
-                    WorkExperience.objects.create(
-                        candidate=candidate,
-                        company_name=exp_data.get('company_name', '') if not is_gap else '',
-                        role_title=exp_data.get('role_title', '') if not is_gap else '',
-                        start_date=f"{exp_data.get('start_year')}-{_month_to_number(exp_data.get('start_month'))}-01",
-                        end_date=f"{exp_data.get('end_year')}-{_month_to_number(exp_data.get('end_month'))}-01" if not exp_data.get('is_current') and exp_data.get('end_year') else None,
-                        is_current=exp_data.get('is_current', False),
-                        current_ctc=float(exp_data.get('ctc', 0)) if exp_data.get('ctc') else None,
-                        location=exp_data.get('location', '') if not is_gap else '',
-                        description=exp_data.get('description', '') if not is_gap else '',
-                        is_gap_period=is_gap,
-                        gap_reason=exp_data.get('gap_reason', '') if is_gap else None,
-                    )
+
+                    if is_gap:
+                        # Save as CareerGap
+                        CareerGap.objects.create(
+                            candidate=candidate,
+                            start_date=f"{exp_data.get('start_year')}-{_month_to_number(exp_data.get('start_month'))}-01",
+                            end_date=f"{exp_data.get('end_year')}-{_month_to_number(exp_data.get('end_month'))}-01",
+                            gap_reason=exp_data.get('gap_reason', '')
+                        )
+                        print(f"✅ Saved career gap in step 2: {exp_data.get('gap_reason')}")
+                    else:
+                        # Save as WorkExperience
+                        WorkExperience.objects.create(
+                            candidate=candidate,
+                            company_name=exp_data.get('company_name', ''),
+                            role_title=exp_data.get('role_title', ''),
+                            start_date=f"{exp_data.get('start_year')}-{_month_to_number(exp_data.get('start_month'))}-01",
+                            end_date=f"{exp_data.get('end_year')}-{_month_to_number(exp_data.get('end_month'))}-01" if not exp_data.get('is_current') and exp_data.get('end_year') else None,
+                            is_current=exp_data.get('is_current', False),
+                            current_ctc=float(exp_data.get('ctc', 0)) if exp_data.get('ctc') else None,
+                            location=exp_data.get('location', ''),
+                            description=exp_data.get('description', ''),
+                        )
+                        print(f"✅ Saved work experience in step 2: {exp_data.get('company_name')}")
 
             # Calculate experience
             from datetime import datetime
@@ -1966,9 +1929,203 @@ def get_profile_tips(request):
             'success': True,
             'tips': tips_data
         })
-        
+
     except Exception as e:
         return Response({
             'error': f'Failed to load profile tips: {str(e)}'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def search_countries(request):
+    """
+    Search countries for autocomplete/autosuggest
+    Query params:
+    - q: search query (required)
+    - limit: number of results (optional, default 10)
+
+    Returns:
+    - Countries matching search query
+    - Ordered by name
+    """
+    search_query = request.query_params.get('q', '').strip()
+    limit = int(request.query_params.get('limit', 10))
+
+    if not search_query:
+        return Response({
+            'success': False,
+            'error': 'Search query (q) is required'
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        country_category = FilterCategory.objects.get(slug='country')
+
+        # Search countries by name (case-insensitive partial match)
+        countries = FilterOption.objects.filter(
+            category=country_category,
+            name__icontains=search_query,
+            is_active=True,
+            is_approved=True
+        ).order_by('name')[:limit]
+
+        countries_data = [
+            {
+                'id': str(country.id),
+                'name': country.name,
+                'slug': country.slug
+            }
+            for country in countries
+        ]
+
+        return Response({
+            'success': True,
+            'query': search_query,
+            'count': len(countries_data),
+            'countries': countries_data
+        })
+
+    except FilterCategory.DoesNotExist:
+        return Response({
+            'success': False,
+            'error': 'Country category not found'
+        }, status=status.HTTP_404_NOT_FOUND)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def search_states(request):
+    """
+    Search states for autocomplete/autosuggest
+    Query params:
+    - q: search query (required)
+    - country: country ID (optional - filters states by country)
+    - limit: number of results (optional, default 10)
+
+    Returns:
+    - States matching search query
+    - Ordered by name
+    """
+    search_query = request.query_params.get('q', '').strip()
+    country_id = request.query_params.get('country', '').strip()
+    limit = int(request.query_params.get('limit', 10))
+
+    if not search_query:
+        return Response({
+            'success': False,
+            'error': 'Search query (q) is required'
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        state_category = FilterCategory.objects.get(slug='state')
+
+        # Build query
+        query_filter = {
+            'category': state_category,
+            'name__icontains': search_query,
+            'is_active': True,
+            'is_approved': True
+        }
+
+        # Filter by country if provided
+        if country_id:
+            query_filter['parent_id'] = country_id
+
+        # Search states by name (case-insensitive partial match)
+        states = FilterOption.objects.filter(**query_filter).order_by('name')[:limit]
+
+        states_data = [
+            {
+                'id': str(state.id),
+                'name': state.name,
+                'slug': state.slug,
+                'country_id': str(state.parent_id) if state.parent_id else None
+            }
+            for state in states
+        ]
+
+        return Response({
+            'success': True,
+            'query': search_query,
+            'count': len(states_data),
+            'states': states_data
+        })
+
+    except FilterCategory.DoesNotExist:
+        return Response({
+            'success': False,
+            'error': 'State category not found'
+        }, status=status.HTTP_404_NOT_FOUND)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def search_cities(request):
+    """
+    Search cities for autocomplete/autosuggest
+    Query params:
+    - q: search query (required)
+    - state: state ID (optional - filters cities by state)
+    - limit: number of results (optional, default 10)
+
+    Returns:
+    - Cities matching search query
+    - Ordered by name
+    """
+    search_query = request.query_params.get('q', '').strip()
+    state_id = request.query_params.get('state', '').strip()
+    limit = int(request.query_params.get('limit', 10))
+
+    if not search_query:
+        return Response({
+            'success': False,
+            'error': 'Search query (q) is required'
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    if not state_id:
+        return Response({
+            'success': False,
+            'error': 'State ID (state) is required'
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        city_category = FilterCategory.objects.get(slug='city')
+
+        # Build query
+        query_filter = {
+            'category': city_category,
+            'name__icontains': search_query,
+            'is_active': True,
+            'is_approved': True
+        }
+
+        # Filter by state if provided
+        if state_id:
+            query_filter['parent_id'] = state_id
+
+        # Search cities by name (case-insensitive partial match)
+        cities = FilterOption.objects.filter(**query_filter).order_by('name')[:limit]
+
+        cities_data = [
+            {
+                'id': str(city.id),
+                'name': city.name,
+                'slug': city.slug,
+                'state_id': str(city.parent_id) if city.parent_id else None
+            }
+            for city in cities
+        ]
+
+        return Response({
+            'success': True,
+            'query': search_query,
+            'count': len(cities_data),
+            'cities': cities_data
+        })
+
+    except FilterCategory.DoesNotExist:
+        return Response({
+            'success': False,
+            'error': 'City category not found'
+        }, status=status.HTTP_404_NOT_FOUND)
 
